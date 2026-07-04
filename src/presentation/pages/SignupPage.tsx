@@ -1,68 +1,108 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { KeyRound, Mail, AlertTriangle, Loader2, UserPlus } from 'lucide-react';
+import { KeyRound, Mail, User, Briefcase, AlertTriangle, CheckCircle, Loader2, ArrowLeft } from 'lucide-react';
 
-// TODO: Remove this flag (and the credentials banner) before production release.
-const DEV_MODE = true;
-
-interface LoginPageProps {
-  onNavigateToSignup: () => void;
+interface SignupPageProps {
+  onNavigateToLogin: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onNavigateToSignup }) => {
-  const { login, error, clearError } = useAuth();
+const ROLE_OPTIONS = [
+  { value: 'recruiter', label: 'Recruiter' },
+  { value: 'hiring_manager', label: 'Hiring Manager' },
+  { value: 'interviewer', label: 'Interviewer' },
+  { value: 'admin', label: 'Admin' },
+];
+
+export const SignupPage: React.FC<SignupPageProps> = ({ onNavigateToLogin }) => {
+  const { signup, error, clearError } = useAuth();
+
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState('recruiter');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  // Handles form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
     clearError();
 
-    // Local validation
-    if (!email.trim() || !password.trim()) {
-      setValidationError('Please enter both email and password.');
+    if (!fullName.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
+      setValidationError('All fields are required.');
+      return;
+    }
+    if (fullName.trim().length < 2) {
+      setValidationError('Full name must be at least 2 characters.');
+      return;
+    }
+    if (password.length < 6) {
+      setValidationError('Password must be at least 6 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setValidationError('Passwords do not match.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await login(email, password);
-    } catch (err) {
-      // Error is caught by AuthContext, so we just capture completion here
-      console.log('Login attempt failed');
+      await signup(fullName.trim(), email.trim(), password, role);
+    } catch {
+      // Error displayed via AuthContext's error state
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const activeError = validationError || error;
+
   return (
     <div style={styles.pageContainer}>
-      {/* Decorative Background Orbs */}
+      {/* Decorative background orbs */}
       <div style={styles.glowOrb1} />
       <div style={styles.glowOrb2} />
 
-      <div className="glass-card animate-scale-up" style={styles.loginCard}>
+      <div className="glass-card animate-scale-up" style={styles.card}>
+        {/* Header */}
         <div style={styles.headerArea}>
           <div style={styles.logoBadge}>
-            <KeyRound size={28} color="#6366f1" />
+            <CheckCircle size={28} color="#6366f1" />
           </div>
-          <h2 style={styles.title}>ATS Review Panel</h2>
-          <p style={styles.subtitle}>Enter credentials to evaluate resumes</p>
+          <h2 style={styles.title}>Create Account</h2>
+          <p style={styles.subtitle}>Join the ATS Review Panel</p>
         </div>
 
-        {/* Display validation or auth errors */}
-        {(validationError || error) && (
+        {/* Error banner */}
+        {activeError && (
           <div style={styles.errorBanner} className="animate-fade-in">
             <AlertTriangle size={18} style={{ flexShrink: 0 }} />
-            <span>{validationError || error}</span>
+            <span>{activeError}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={styles.form}>
+        <form onSubmit={handleSubmit} style={styles.form} noValidate>
+          {/* Full Name */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="fullName">Full Name</label>
+            <div style={styles.inputWrapper}>
+              <User size={18} style={styles.inputIcon} />
+              <input
+                id="fullName"
+                type="text"
+                className="form-control"
+                placeholder="Jane Smith"
+                value={fullName}
+                onChange={(e) => { setFullName(e.target.value); setValidationError(null); }}
+                disabled={isSubmitting}
+                style={{ paddingLeft: '44px' }}
+                autoComplete="name"
+              />
+            </div>
+          </div>
+
+          {/* Email */}
           <div className="form-group">
             <label className="form-label" htmlFor="email">Email Address</label>
             <div style={styles.inputWrapper}>
@@ -71,12 +111,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigateToSignup }) => {
                 id="email"
                 type="email"
                 className="form-control"
-                placeholder="you@company.com"
+                placeholder="jane@company.com"
                 value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  if (validationError) setValidationError(null);
-                }}
+                onChange={(e) => { setEmail(e.target.value); setValidationError(null); }}
                 disabled={isSubmitting}
                 style={{ paddingLeft: '44px' }}
                 autoComplete="email"
@@ -84,7 +121,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigateToSignup }) => {
             </div>
           </div>
 
-          <div className="form-group" style={{ marginBottom: '24px' }}>
+          {/* Role */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="role">Role</label>
+            <div style={styles.inputWrapper}>
+              <Briefcase size={18} style={styles.inputIcon} />
+              <select
+                id="role"
+                className="form-control"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                disabled={isSubmitting}
+                style={{ paddingLeft: '44px', cursor: 'pointer' }}
+              >
+                {ROLE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Password */}
+          <div className="form-group">
             <label className="form-label" htmlFor="password">Password</label>
             <div style={styles.inputWrapper}>
               <KeyRound size={18} style={styles.inputIcon} />
@@ -92,15 +150,31 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigateToSignup }) => {
                 id="password"
                 type="password"
                 className="form-control"
-                placeholder="••••••"
+                placeholder="Min. 6 characters"
                 value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (validationError) setValidationError(null);
-                }}
+                onChange={(e) => { setPassword(e.target.value); setValidationError(null); }}
                 disabled={isSubmitting}
                 style={{ paddingLeft: '44px' }}
-                autoComplete="current-password"
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+
+          {/* Confirm Password */}
+          <div className="form-group" style={{ marginBottom: '24px' }}>
+            <label className="form-label" htmlFor="confirmPassword">Confirm Password</label>
+            <div style={styles.inputWrapper}>
+              <KeyRound size={18} style={styles.inputIcon} />
+              <input
+                id="confirmPassword"
+                type="password"
+                className="form-control"
+                placeholder="Repeat password"
+                value={confirmPassword}
+                onChange={(e) => { setConfirmPassword(e.target.value); setValidationError(null); }}
+                disabled={isSubmitting}
+                style={{ paddingLeft: '44px' }}
+                autoComplete="new-password"
               />
             </div>
           </div>
@@ -113,43 +187,33 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigateToSignup }) => {
           >
             {isSubmitting ? (
               <>
-                <Loader2 size={18} className="animate-spin" style={styles.spinner} />
-                Authenticating...
+                <Loader2 size={18} className="animate-spin" style={{ marginRight: '8px' }} />
+                Creating Account...
               </>
             ) : (
-              'Sign In'
+              'Create Account'
             )}
           </button>
         </form>
 
-        {/* Navigate to signup */}
+        {/* Navigate to login */}
         <div style={styles.footer}>
-          <span style={styles.footerText}>Don&apos;t have an account?</span>
+          <span style={styles.footerText}>Already have an account?</span>
           <button
             type="button"
-            onClick={onNavigateToSignup}
+            onClick={onNavigateToLogin}
             disabled={isSubmitting}
             style={styles.linkButton}
           >
-            <UserPlus size={14} style={{ marginRight: '4px' }} />
-            Create Account
+            <ArrowLeft size={14} style={{ marginRight: '4px' }} />
+            Sign In
           </button>
         </div>
-
-        {/* DEV-ONLY: remove before going to production */}
-        {DEV_MODE && (
-          <div style={styles.devBanner}>
-            <p style={styles.devTitle}>Dev Credentials</p>
-            <code style={styles.devCode}>admin@ats.com</code>
-            <code style={styles.devCode}>123456</code>
-          </div>
-        )}
       </div>
     </div>
   );
 };
 
-// Inline premium styles for login layout
 const styles: Record<string, React.CSSProperties> = {
   pageContainer: {
     display: 'flex',
@@ -167,7 +231,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: '300px',
     borderRadius: '50%',
     background: 'radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%)',
-    top: '25%',
+    top: '20%',
     left: '35%',
     filter: 'blur(50px)',
     pointerEvents: 'none',
@@ -179,15 +243,15 @@ const styles: Record<string, React.CSSProperties> = {
     height: '250px',
     borderRadius: '50%',
     background: 'radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, transparent 70%)',
-    bottom: '30%',
+    bottom: '20%',
     right: '35%',
     filter: 'blur(45px)',
     pointerEvents: 'none',
     zIndex: 0,
   },
-  loginCard: {
+  card: {
     width: '100%',
-    maxWidth: '420px',
+    maxWidth: '440px',
     padding: '40px 32px',
     zIndex: 1,
     border: '1px solid var(--border-glass)',
@@ -195,7 +259,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   headerArea: {
     textAlign: 'center',
-    marginBottom: '32px',
+    marginBottom: '28px',
   },
   logoBadge: {
     display: 'inline-flex',
@@ -229,7 +293,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '12px 16px',
     color: '#fca5a5',
     fontSize: '0.88rem',
-    marginBottom: '24px',
+    marginBottom: '20px',
   },
   form: {
     display: 'flex',
@@ -245,9 +309,6 @@ const styles: Record<string, React.CSSProperties> = {
     left: '16px',
     color: 'var(--text-muted)',
     pointerEvents: 'none',
-  },
-  spinner: {
-    animation: 'spin 1s linear infinite',
   },
   footer: {
     display: 'flex',
@@ -272,28 +333,5 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: '600',
     fontFamily: 'inherit',
     transition: 'var(--transition-fast)',
-  },
-  devBanner: {
-    marginTop: '16px',
-    padding: '12px 16px',
-    borderRadius: 'var(--radius-md)',
-    backgroundColor: 'rgba(245, 158, 11, 0.06)',
-    border: '1px dashed rgba(245, 158, 11, 0.35)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  devTitle: {
-    fontSize: '0.72rem',
-    fontWeight: '600',
-    color: 'var(--accent-amber)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-    marginBottom: '2px',
-  },
-  devCode: {
-    fontFamily: 'monospace',
-    fontSize: '0.82rem',
-    color: 'var(--text-muted)',
   },
 };

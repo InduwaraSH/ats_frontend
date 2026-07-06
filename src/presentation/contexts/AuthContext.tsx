@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User } from '../../domain/entities/User';
 import { ApiAuthService } from '../../infrastructure/services/ApiAuthService';
 import { useToast } from './ToastContext';
+import { AuthService } from '../../infrastructure/services/AuthService';
 
 // Define context state schema
 interface AuthContextType {
@@ -18,6 +19,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Use the real API-backed service
 const authService = new ApiAuthService();
+// Instantiate our authentication service
+const authService = new AuthService();
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);

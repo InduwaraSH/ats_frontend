@@ -1,5 +1,18 @@
-import type { CV } from '../../domain/entities/CV';
 import type { MatchResult } from '../../domain/entities/MatchResult';
+
+/**
+ * Progress callback payload from SSE stream.
+ */
+export interface UploadProgress {
+  current: number;
+  total: number;
+  fileName: string;
+  status: 'completed' | 'failed';
+  error?: string;
+  candidateId?: string;
+  applicationId?: string;
+  candidateName?: string;
+}
 
 /**
  * CV analysis and processing service interface.
@@ -7,12 +20,15 @@ import type { MatchResult } from '../../domain/entities/MatchResult';
  */
 export interface ICVService {
   /**
-   * Processes a list of uploaded files and scores them against the job description.
-   * @param jobDescription The target job description text
+   * Uploads CV files to the backend for processing.
    * @param files Array of uploaded files (PDF, TXT, DOCX etc.)
-   * @returns Array of CV entities containing basic score and metadata
+   * @param onProgress Callback fired for each file's progress event
+   * @returns Summary of the upload operation
    */
-  analyzeCVs(jobDescription: string, files: File[]): Promise<CV[]>;
+  uploadCVs(
+    files: File[],
+    onProgress?: (progress: UploadProgress) => void,
+  ): Promise<{ totalSuccess: number; totalFailed: number }>;
 
   /**
    * Retrieves the detailed match analysis report for a specific CV.

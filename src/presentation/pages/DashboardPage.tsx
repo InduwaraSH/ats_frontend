@@ -28,6 +28,7 @@ export const DashboardPage: React.FC = () => {
     selectedCV,
     loading,
     error,
+    uploadProgress,
     setJobDescription,
     uploadCVs,
     deleteCV,
@@ -63,11 +64,6 @@ export const DashboardPage: React.FC = () => {
     setDragActive(false);
     setUploadError(null);
 
-    if (!jdText.trim()) {
-      setUploadError('Please paste a Job Description before uploading CVs.');
-      return;
-    }
-
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const files = Array.from(e.dataTransfer.files);
       const validFiles = files.filter(file => 
@@ -83,6 +79,11 @@ export const DashboardPage: React.FC = () => {
         return;
       }
 
+      if (validFiles.length > 100) {
+        setUploadError('Maximum 100 files allowed per upload.');
+        return;
+      }
+
       await uploadCVs(validFiles);
     }
   };
@@ -90,14 +91,14 @@ export const DashboardPage: React.FC = () => {
   // File Select Input Handler
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setUploadError(null);
-    if (!jdText.trim()) {
-      setUploadError('Please paste a Job Description before uploading CVs.');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
 
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
+      if (files.length > 100) {
+        setUploadError('Maximum 100 files allowed per upload.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
       await uploadCVs(files);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -213,25 +214,48 @@ export const DashboardPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Quick Mock Test Resumes */}
-              <div style={styles.quickUploadArea}>
-                <span style={styles.quickUploadText}>Want to test the platform instantly?</span>
-                <button
-                  id="btn-mock-upload"
-                  type="button"
-                  style={styles.quickUploadBtn}
-                  onClick={async (e) => {
-                    e.stopPropagation(); // Avoid triggering file selection dialog
-                    const mockFile1 = new File(["Kamal Perera\nSenior Software Engineer\nPython Django REST API Git Docker Clean Architecture"], "Kamal_Perera_Resume.pdf", { type: "application/pdf" });
-                    const mockFile2 = new File(["Roshan Silva\nSenior Frontend Developer\nReact TypeScript HTML CSS Git"], "Roshan_Silva_CV.txt", { type: "text/plain" });
-                    await uploadCVs([mockFile1, mockFile2]);
-                  }}
-                  disabled={loading || !jdText.trim()}
-                  title={!jdText.trim() ? "Please enter a Job Description first" : "Click to load sample candidates"}
-                >
-                  Load Sample Resumes
-                </button>
-              </div>
+              {/* Upload Progress Bar */}
+              {(loading && uploadProgress) && (
+                <div style={styles.progressContainer} className="animate-fade-in">
+                  <div style={styles.progressHeader}>
+                    <span style={styles.progressLabel}>
+                      Processing {uploadProgress.current} of {uploadProgress.total} files
+                    </span>
+                    <span style={styles.progressPercent}>
+                      {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%
+                    </span>
+                  </div>
+                  <div style={styles.progressTrack}>
+                    <div
+                      style={{
+                        ...styles.progressBar,
+                        width: `${(uploadProgress.current / uploadProgress.total) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <div style={styles.progressFileName}>
+                    <FileText size={12} color="var(--text-muted)" />
+                    <span>{uploadProgress.fileName}</span>
+                    {uploadProgress.status === 'completed' ? (
+                      <CheckCircle2 size={14} color="var(--accent-emerald)" />
+                    ) : (
+                      <XCircle size={14} color="var(--accent-rose)" />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Loading state without progress (initial) */}
+              {(loading && !uploadProgress) && (
+                <div style={styles.progressContainer} className="animate-fade-in">
+                  <div style={styles.progressHeader}>
+                    <span style={styles.progressLabel}>Preparing upload...</span>
+                  </div>
+                  <div style={styles.progressTrack}>
+                    <div style={{ ...styles.progressBar, width: '15%', animation: 'progressPulse 1.5s ease-in-out infinite' }} />
+                  </div>
+                </div>
+              )}
 
               {/* Error messages */}
               {(uploadError || error) && (
@@ -992,30 +1016,51 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(6, 9, 19, 0.4)',
   },
-  quickUploadArea: {
+  progressContainer: {
+    marginTop: '20px',
+    padding: '16px 20px',
+    borderRadius: 'var(--radius-md)',
+    backgroundColor: 'rgba(12, 18, 36, 0.6)',
+    border: '1px solid var(--border-glass)',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '10px',
+  },
+  progressHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressLabel: {
+    fontSize: '0.85rem',
+    fontWeight: '500',
+    color: 'var(--text-body)',
+  },
+  progressPercent: {
+    fontSize: '0.85rem',
+    fontWeight: '700',
+    color: 'var(--accent-indigo)',
+  },
+  progressTrack: {
+    width: '100%',
+    height: '6px',
+    borderRadius: 'var(--radius-full)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 'var(--radius-full)',
+    background: 'linear-gradient(90deg, var(--accent-indigo), var(--accent-purple))',
+    transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+    boxShadow: '0 0 12px rgba(99, 102, 241, 0.4)',
+  },
+  progressFileName: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: '12px',
-    marginTop: '16px',
-    padding: '12px',
-    borderRadius: 'var(--radius-md)',
-    backgroundColor: 'rgba(255, 255, 255, 0.01)',
-    border: '1px solid var(--border-glass)',
-  },
-  quickUploadText: {
-    fontSize: '0.82rem',
+    gap: '6px',
+    fontSize: '0.8rem',
     color: 'var(--text-muted)',
   },
-  quickUploadBtn: {
-    background: 'rgba(99, 102, 241, 0.1)',
-    border: '1px solid rgba(99, 102, 241, 0.25)',
-    color: 'var(--accent-indigo)',
-    padding: '6px 12px',
-    borderRadius: 'var(--radius-sm)',
-    fontSize: '0.8rem',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'var(--transition-smooth)',
-  },
 };
+

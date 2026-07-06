@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState } from 'react';
 import type { CV } from '../../domain/entities/CV';
-import { MockCVService } from '../../infrastructure/services/MockCVService';
+import { CVService } from '../../infrastructure/services/CVService';
+import type { UploadProgress } from '../../application/services/ICVService';
 
 // Define context state schema
 interface CVContextType {
@@ -9,6 +10,7 @@ interface CVContextType {
   selectedCV: CV | null;
   loading: boolean;
   error: string | null;
+  uploadProgress: UploadProgress | null;
   setJobDescription: (jd: string) => void;
   uploadCVs: (files: File[]) => Promise<void>;
   deleteCV: (cvId: string) => Promise<void>;
@@ -17,8 +19,8 @@ interface CVContextType {
 
 const CVContext = createContext<CVContextType | undefined>(undefined);
 
-// Instantiate our mock CV service
-const cvService = new MockCVService();
+// Instantiate our real CV service
+const cvService = new CVService();
 
 export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [jobDescription, setJobDescriptionState] = useState<string>('');
@@ -26,35 +28,60 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [selectedCV, setSelectedCV] = useState<CV | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
 
   const setJobDescription = (jd: string) => {
     setJobDescriptionState(jd);
   };
 
   /**
-   * Uploads and scores the CVs using the CVService.
+   * Uploads CVs via the real backend service with SSE progress tracking.
    */
   const uploadCVs = async (files: File[]) => {
-    if (!jobDescription.trim()) {
-      setError('Please provide a Job Description before uploading resumes.');
-      return;
-    }
-    
     if (files.length === 0) {
-      setError('No files selected. Please select one or more PDF or Text files.');
+      setError('No files selected. Please select one or more PDF, DOCX or TXT files.');
       return;
     }
 
     setLoading(true);
     setError(null);
+    setUploadProgress(null);
 
     try {
-      const parsedCVs = await cvService.analyzeCVs(jobDescription, files);
-      setCvs((prevCVs) => [...parsedCVs, ...prevCVs]);
+      const result = await cvService.uploadCVs(files, (progress) => {
+        setUploadProgress(progress);
+
+        // Build a CV entity for each completed file and add to the list
+        if (progress.status === 'completed') {
+          const newCV: CV = {
+            id: progress.applicationId ?? `cv_${Date.now()}_${progress.current}`,
+            fileName: progress.fileName,
+            fileSize: '',
+            applicantName:
+              progress.candidateName ??
+              progress.fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '),
+            status: 'completed',
+            matchScore: 0, // Will be set by LLM scoring later
+            uploadedAt: new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          };
+          setCvs((prevCVs) => [newCV, ...prevCVs]);
+        }
+      });
+
+      if (result.totalFailed > 0) {
+        setError(`${result.totalFailed} file(s) failed to process.`);
+      }
     } catch (err: any) {
       setError(err.message || 'Error processing files. Please try again.');
     } finally {
       setLoading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -81,6 +108,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         selectedCV,
         loading,
         error,
+        uploadProgress,
         setJobDescription,
         uploadCVs,
         deleteCV,

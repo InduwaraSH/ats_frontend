@@ -1,17 +1,24 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { CV } from '../../domain/entities/CV';
 import { CVService } from '../../infrastructure/services/CVService';
 import type { UploadProgress } from '../../application/services/ICVService';
+import { JobService } from '../../infrastructure/services/JobService';
 
 // Define context state schema
 interface CVContextType {
   jobDescription: string;
+  jobTitle: string;
+  jobId: string;
   cvs: CV[];
   selectedCV: CV | null;
   loading: boolean;
   error: string | null;
   uploadProgress: UploadProgress | null;
   setJobDescription: (jd: string) => void;
+  setJobTitle: (title: string) => void;
+  setJobId: (id: string) => void;
+  saveJobDetails: (id: string, title: string, description: string) => Promise<void>;
+  fetchLatestJob: () => Promise<void>;
   uploadCVs: (files: File[]) => Promise<void>;
   deleteCV: (cvId: string) => Promise<void>;
   setSelectedCV: (cv: CV | null) => void;
@@ -19,19 +26,77 @@ interface CVContextType {
 
 const CVContext = createContext<CVContextType | undefined>(undefined);
 
-// Instantiate our real CV service
+// Instantiate our real services
 const cvService = new CVService();
+const jobService = new JobService();
 
 export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [jobDescription, setJobDescriptionState] = useState<string>('');
+  const [jobTitle, setJobTitle] = useState<string>('');
+  const [jobId, setJobId] = useState<string>('');
   const [cvs, setCvs] = useState<CV[]>([]);
   const [selectedCV, setSelectedCV] = useState<CV | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
 
+  // Fetch the latest job details on mount
+  useEffect(() => {
+    fetchLatestJob();
+  }, []);
+
   const setJobDescription = (jd: string) => {
     setJobDescriptionState(jd);
+  };
+
+  /**
+   * Saves or updates job details in the backend.
+   */
+  const saveJobDetails = async (id: string, title: string, description: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const saved = await jobService.saveJob({
+        jobId: id,
+        title,
+        description,
+      });
+      setJobId(saved.jobId);
+      setJobTitle(saved.title);
+      setJobDescriptionState(saved.description);
+    } catch (err: any) {
+      setError(err.message || 'Failed to save job details.');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Fetches latest job details and populates context state.
+   */
+  const fetchLatestJob = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const jobs = await jobService.listJobs();
+      if (jobs.length > 0) {
+        // Sort descending by updatedAt
+        const sorted = jobs.sort((a, b) => {
+          const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+          const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+          return dateB - dateA;
+        });
+        const latest = sorted[0];
+        setJobId(latest.jobId);
+        setJobTitle(latest.title);
+        setJobDescriptionState(latest.description);
+      }
+    } catch (err: any) {
+      console.error('Error fetching latest job:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   /**
@@ -104,12 +169,18 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     <CVContext.Provider
       value={{
         jobDescription,
+        jobTitle,
+        jobId,
         cvs,
         selectedCV,
         loading,
         error,
         uploadProgress,
         setJobDescription,
+        setJobTitle,
+        setJobId,
+        saveJobDetails,
+        fetchLatestJob,
         uploadCVs,
         deleteCV,
         setSelectedCV,

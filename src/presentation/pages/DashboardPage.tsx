@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCV } from '../contexts/CVContext';
 
@@ -24,21 +24,66 @@ export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
   const {
     jobDescription,
+    jobTitle,
+    jobId,
     cvs,
     selectedCV,
     loading,
     error,
     uploadProgress,
     setJobDescription,
+    setJobTitle,
+    setJobId,
+    saveJobDetails,
     uploadCVs,
     deleteCV,
     setSelectedCV,
   } = useCV();
 
   const [jdText, setJdText] = useState(jobDescription);
+  const [titleText, setTitleText] = useState(jobTitle);
+  const [idText, setIdText] = useState(jobId);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Synchronize local states when fetched from the backend on load
+  useEffect(() => {
+    setJdText(jobDescription);
+  }, [jobDescription]);
+
+  useEffect(() => {
+    setTitleText(jobTitle);
+  }, [jobTitle]);
+
+  useEffect(() => {
+    setIdText(jobId);
+  }, [jobId]);
+
+  const handleSaveJob = async () => {
+    if (!idText.trim() || !titleText.trim() || !jdText.trim()) {
+      setSaveStatus('error');
+      setSaveMessage('Please fill in Job ID, Job Title, and Job Description.');
+      return;
+    }
+
+    setSaveStatus('saving');
+    setSaveMessage(null);
+    try {
+      await saveJobDetails(idText.trim(), titleText.trim(), jdText.trim());
+      setSaveStatus('success');
+      setSaveMessage('Job details saved successfully!');
+      setTimeout(() => {
+        setSaveStatus('idle');
+        setSaveMessage(null);
+      }, 4000);
+    } catch (err: any) {
+      setSaveStatus('error');
+      setSaveMessage(err.message || 'Failed to save job details.');
+    }
+  };
 
   // Synchronize internal text state with global context
   const handleJdChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -172,6 +217,69 @@ export const DashboardPage: React.FC = () => {
                   <span>{jdText.length} characters</span>
                   <span>{jdText.split(/\s+/).filter(Boolean).length} words</span>
                 </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label className="form-label">Job Title</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. Senior Software Engineer"
+                  value={titleText}
+                  onChange={(e) => {
+                    setTitleText(e.target.value);
+                    setJobTitle(e.target.value);
+                  }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
+                <label className="form-label">Job ID</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. JOB-2026-001"
+                  value={idText}
+                  onChange={(e) => {
+                    setIdText(e.target.value);
+                    setJobId(e.target.value);
+                  }}
+                />
+              </div>
+
+              {/* Save Job Details Button & Status */}
+              <div style={{ marginBottom: '32px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                  className="btn-primary"
+                  onClick={handleSaveJob}
+                  disabled={saveStatus === 'saving'}
+                  style={{ width: '100%' }}
+                >
+                  {saveStatus === 'saving' ? 'Saving Job Details...' : 'Save Job Details'}
+                </button>
+                {saveMessage && (
+                  <div
+                    style={{
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      color: saveStatus === 'success' ? 'var(--accent-emerald)' : 'var(--accent-rose)',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: saveStatus === 'success' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(244, 63, 94, 0.08)',
+                      border: `1px solid ${saveStatus === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)'}`,
+                    }}
+                    className="animate-fade-in"
+                  >
+                    {saveStatus === 'success' ? (
+                      <CheckCircle2 size={16} color="var(--accent-emerald)" />
+                    ) : (
+                      <XCircle size={16} color="var(--accent-rose)" />
+                    )}
+                    <span>{saveMessage}</span>
+                  </div>
+                )}
               </div>
 
               <div style={styles.panelHeader}>

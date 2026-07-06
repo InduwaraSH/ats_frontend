@@ -13,12 +13,16 @@ export class CVService implements ICVService {
    */
   async uploadCVs(
     files: File[],
+    jobId: string,
+    jobTitle: string,
     onProgress?: (progress: UploadProgress) => void,
   ): Promise<{ totalSuccess: number; totalFailed: number }> {
     const formData = new FormData();
     files.forEach((file) => {
       formData.append('files', file);
     });
+    formData.append('job_id', jobId);
+    formData.append('job_title', jobTitle);
 
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 
@@ -80,6 +84,7 @@ export class CVService implements ICVService {
                 candidateId: data.candidate_id,
                 applicationId: data.application_id,
                 candidateName: data.candidate_name,
+                matchScore: data.match_score ?? 0,
               });
             }
 

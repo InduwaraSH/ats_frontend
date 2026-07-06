@@ -19,7 +19,7 @@ interface CVContextType {
   setJobId: (id: string) => void;
   saveJobDetails: (id: string, title: string, description: string) => Promise<void>;
   fetchLatestJob: () => Promise<void>;
-  uploadCVs: (files: File[]) => Promise<void>;
+  uploadCVs: (files: File[], jobId: string, jobTitle: string) => Promise<void>;
   deleteCV: (cvId: string) => Promise<void>;
   setSelectedCV: (cv: CV | null) => void;
 }
@@ -40,10 +40,42 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
 
-  // Fetch the latest job details on mount
+  // Fetch the latest job details and historical applications on mount
   useEffect(() => {
     fetchLatestJob();
+    loadEvaluatedCVs();
   }, []);
+
+  const loadEvaluatedCVs = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/applications/', {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const apps = await response.json();
+        const mappedCVs: CV[] = apps.map((app: any) => ({
+          id: app.id || app._id,
+          fileName: app.file_name,
+          fileSize: '',
+          applicantName: app.candidate_name || 'Unknown',
+          status: app.status === 'completed' ? 'completed' : 'failed',
+          matchScore: Math.round(app.match_score || 0),
+          uploadedAt: new Date(app.created_at).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          jobId: app.job_id,
+          jobTitle: app.job_title,
+        }));
+        setCvs(mappedCVs);
+      }
+    } catch (err) {
+      console.error('Error loading evaluated CVs:', err);
+    }
+  };
 
   const setJobDescription = (jd: string) => {
     setJobDescriptionState(jd);
@@ -102,7 +134,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   /**
    * Uploads CVs via the real backend service with SSE progress tracking.
    */
-  const uploadCVs = async (files: File[]) => {
+  const uploadCVs = async (files: File[], uploadJobId: string, uploadJobTitle: string) => {
     if (files.length === 0) {
       setError('No files selected. Please select one or more PDF, DOCX or TXT files.');
       return;
@@ -113,7 +145,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setUploadProgress(null);
 
     try {
-      const result = await cvService.uploadCVs(files, (progress) => {
+      const result = await cvService.uploadCVs(files, uploadJobId, uploadJobTitle, (progress) => {
         setUploadProgress(progress);
 
         // Build a CV entity for each completed file and add to the list
@@ -126,7 +158,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
               progress.candidateName ??
               progress.fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '),
             status: 'completed',
-            matchScore: 0, // Will be set by LLM scoring later
+            matchScore: progress.matchScore ?? 0,
             uploadedAt: new Date().toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'short',
@@ -134,6 +166,8 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
               hour: '2-digit',
               minute: '2-digit',
             }),
+            jobId: uploadJobId,
+            jobTitle: uploadJobTitle,
           };
           setCvs((prevCVs) => [newCV, ...prevCVs]);
         }

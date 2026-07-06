@@ -12,4 +12,6 @@ export interface CV {
   matchScore: number; // 0 to 100
   matchDetails?: MatchResult;
   uploadedAt: string;
+  jobId?: string;
+  jobTitle?: string;
 }

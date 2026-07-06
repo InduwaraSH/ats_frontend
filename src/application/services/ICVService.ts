@@ -12,6 +12,7 @@ export interface UploadProgress {
   candidateId?: string;
   applicationId?: string;
   candidateName?: string;
+  matchScore?: number;
 }
 
 /**
@@ -22,11 +23,15 @@ export interface ICVService {
   /**
    * Uploads CV files to the backend for processing.
    * @param files Array of uploaded files (PDF, TXT, DOCX etc.)
+   * @param jobId Unique Job ID to match CVs against
+   * @param jobTitle Job Title to match CVs against
    * @param onProgress Callback fired for each file's progress event
    * @returns Summary of the upload operation
    */
   uploadCVs(
     files: File[],
+    jobId: string,
+    jobTitle: string,
     onProgress?: (progress: UploadProgress) => void,
   ): Promise<{ totalSuccess: number; totalFailed: number }>;
 
@@ -42,3 +47,4 @@ export interface ICVService {
    */
   deleteCV(cvId: string): Promise<void>;
 }
+

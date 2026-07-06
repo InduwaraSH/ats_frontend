@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User } from '../../domain/entities/User';
-import { MockAuthService } from '../../infrastructure/services/MockAuthService';
+import { AuthService } from '../../infrastructure/services/AuthService';
 
 // Define context state schema
 interface AuthContextType {
@@ -14,8 +14,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Instantiate our mock authentication service
-const authService = new MockAuthService();
+// Instantiate our authentication service
+const authService = new AuthService();
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);

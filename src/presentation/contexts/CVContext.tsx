@@ -3,6 +3,7 @@ import type { CV } from '../../domain/entities/CV';
 import { CVService } from '../../infrastructure/services/CVService';
 import type { UploadProgress } from '../../application/services/ICVService';
 import { JobService } from '../../infrastructure/services/JobService';
+import type { Job } from '../../domain/entities/Job';
 
 // Define context state schema
 interface CVContextType {
@@ -14,15 +15,62 @@ interface CVContextType {
   loading: boolean;
   error: string | null;
   uploadProgress: UploadProgress | null;
+  jobsList: Job[];
   setJobDescription: (jd: string) => void;
   setJobTitle: (title: string) => void;
   setJobId: (id: string) => void;
   saveJobDetails: (id: string, title: string, description: string) => Promise<void>;
   fetchLatestJob: () => Promise<void>;
-  uploadCVs: (files: File[], jobId: string, jobTitle: string) => Promise<void>;
+  uploadCVs: (files: File[], jobId: string, jobTitle: string) => Promise<{ totalSuccess: number; totalFailed: number } | undefined>;
   deleteCV: (cvId: string) => Promise<void>;
   setSelectedCV: (cv: CV | null) => void;
+  deleteJob: (jobId: string) => Promise<void>;
+  startNewJob: () => void;
+  selectJob: (job: Job) => void;
 }
+
+const getLinkedinUrl = (urls: string[], name: string): string | undefined => {
+  const linkedinUrls = urls.filter((u) => u.toLowerCase().includes('linkedin.com'));
+  if (linkedinUrls.length === 0) return undefined;
+  if (linkedinUrls.length === 1) return linkedinUrls[0];
+
+  // Tokenize candidate name (split by space, strip non-alphanumeric, lower case)
+  const nameParts = name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(/\s+/)
+    .filter((part) => part.length > 2); // only parts > 2 chars, e.g. sajith, sampath, dilhara
+
+  // Rank URLs based on match count
+  let bestUrl = linkedinUrls[0];
+  let maxScore = -1;
+
+  for (const url of linkedinUrls) {
+    const urlLower = url.toLowerCase();
+    
+    // Check if it is a personal profile URL (/in/ is standard, /posts/ or /feed/ are post links)
+    const isProfile = urlLower.includes('/in/');
+    const isPostOrShare = urlLower.includes('/posts/') || urlLower.includes('/feed/') || urlLower.includes('/share/');
+    
+    let score = 0;
+    if (isProfile) score += 5; // Preference for profile URLs
+    if (isPostOrShare) score -= 3; // Demote posts/shares
+
+    // Count name matches
+    for (const part of nameParts) {
+      if (urlLower.includes(part)) {
+        score += 10;
+      }
+    }
+
+    if (score > maxScore) {
+      maxScore = score;
+      bestUrl = url;
+    }
+  }
+
+  return bestUrl;
+};
 
 const CVContext = createContext<CVContextType | undefined>(undefined);
 
@@ -39,6 +87,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [jobsList, setJobsList] = useState<Job[]>([]);
 
   // Fetch the latest job details and historical applications on mount
   useEffect(() => {
@@ -59,7 +108,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           fileSize: '',
           applicantName: app.candidate_name || 'Unknown',
           status: app.status === 'completed' ? 'completed' : 'failed',
-          matchScore: Math.round(app.match_score || 0),
+          matchScore: Number(app.match_score || 0),
           uploadedAt: new Date(app.created_at).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
@@ -69,6 +118,21 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           }),
           jobId: app.job_id,
           jobTitle: app.job_title,
+          urls: app.urls || [],
+          githubUrl: (app.urls || []).find((u: string) => u.toLowerCase().includes('github.com')) || undefined,
+          linkedinUrl: getLinkedinUrl(app.urls || [], app.candidate_name || ''),
+          matchDetails: app.match_details ? {
+            id: app.match_details.id || app.match_details._id || app.id || app._id,
+            cvId: app.match_details.cvId || app.id || app._id,
+            score: Math.round(app.match_details.score || app.match_score || 0),
+            matchingSkills: app.match_details.matchingSkills || [],
+            missingSkills: app.match_details.missingSkills || [],
+            additionalAdvantages: app.match_details.additionalAdvantages || [],
+            experienceSummary: app.match_details.experienceSummary || '',
+            educationSummary: app.match_details.educationSummary || '',
+            summaryReport: app.match_details.summaryReport || '',
+            github_projects: app.match_details.github_projects || [],
+          } : undefined
         }));
         setCvs(mappedCVs);
       }
@@ -79,6 +143,25 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   const setJobDescription = (jd: string) => {
     setJobDescriptionState(jd);
+  };
+
+  /**
+   * Fetches all jobs and saves to jobsList state.
+   */
+  const fetchJobsList = async (): Promise<Job[]> => {
+    try {
+      const jobs = await jobService.listJobs();
+      const sorted = jobs.sort((a, b) => {
+        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return dateB - dateA;
+      });
+      setJobsList(sorted);
+      return sorted;
+    } catch (err) {
+      console.error('Error fetching jobs list:', err);
+      return [];
+    }
   };
 
   /**
@@ -96,6 +179,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       setJobId(saved.jobId);
       setJobTitle(saved.title);
       setJobDescriptionState(saved.description);
+      await fetchJobsList();
     } catch (err: any) {
       setError(err.message || 'Failed to save job details.');
       throw err;
@@ -111,15 +195,9 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setLoading(true);
     setError(null);
     try {
-      const jobs = await jobService.listJobs();
-      if (jobs.length > 0) {
-        // Sort descending by updatedAt
-        const sorted = jobs.sort((a, b) => {
-          const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-          const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-          return dateB - dateA;
-        });
-        const latest = sorted[0];
+      const sortedJobs = await fetchJobsList();
+      if (sortedJobs.length > 0) {
+        const latest = sortedJobs[0];
         setJobId(latest.jobId);
         setJobTitle(latest.title);
         setJobDescriptionState(latest.description);
@@ -131,10 +209,40 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   };
 
+  const startNewJob = () => {
+    setJobId('');
+    setJobTitle('');
+    setJobDescriptionState('');
+  };
+
+  const selectJob = (job: Job) => {
+    setJobId(job.jobId);
+    setJobTitle(job.title);
+    setJobDescriptionState(job.description);
+  };
+
+  const deleteJob = async (idToDelete: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await jobService.deleteJob(idToDelete);
+      setJobsList((prev) => prev.filter((j) => j.jobId !== idToDelete));
+      if (jobId === idToDelete) {
+        startNewJob();
+      }
+      await loadEvaluatedCVs();
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete job.');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   /**
    * Uploads CVs via the real backend service with SSE progress tracking.
    */
-  const uploadCVs = async (files: File[], uploadJobId: string, uploadJobTitle: string) => {
+  const uploadCVs = async (files: File[], uploadJobId: string, uploadJobTitle: string): Promise<{ totalSuccess: number; totalFailed: number } | undefined> => {
     if (files.length === 0) {
       setError('No files selected. Please select one or more PDF, DOCX or TXT files.');
       return;
@@ -173,11 +281,16 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         }
       });
 
+      // Reload evaluated CVs to pull full match_details/github_projects from DB
+      await loadEvaluatedCVs();
+
       if (result.totalFailed > 0) {
         setError(`${result.totalFailed} file(s) failed to process.`);
       }
+      return result;
     } catch (err: any) {
       setError(err.message || 'Error processing files. Please try again.');
+      throw err;
     } finally {
       setLoading(false);
       setUploadProgress(null);
@@ -210,6 +323,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         loading,
         error,
         uploadProgress,
+        jobsList,
         setJobDescription,
         setJobTitle,
         setJobId,
@@ -218,6 +332,9 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         uploadCVs,
         deleteCV,
         setSelectedCV,
+        deleteJob,
+        startNewJob,
+        selectJob,
       }}
     >
       {children}

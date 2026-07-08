@@ -1,21 +1,17 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { AuthProvider, useAuth } from './presentation/contexts/AuthContext';
 import { CVProvider } from './presentation/contexts/CVContext';
 import { ToastProvider } from './presentation/contexts/ToastContext';
 import { LoginPage } from './presentation/pages/LoginPage';
-import { SignupPage } from './presentation/pages/SignupPage';
 import { DashboardPage } from './presentation/pages/DashboardPage';
 import { Loader2 } from 'lucide-react';
 import './presentation/styles/index.css';
-
-type AuthPage = 'login' | 'signup';
 
 /**
  * Helper component that handles page routing based on the global authentication state.
  */
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
-  const [authPage, setAuthPage] = useState<AuthPage>('login');
 
   // Show a full-screen loading spinner while verifying active sessions (localStorage check)
   if (loading) {
@@ -31,9 +27,7 @@ const AppContent: React.FC = () => {
 
   if (user) return <DashboardPage />;
 
-  return authPage === 'signup'
-    ? <SignupPage onNavigateToLogin={() => setAuthPage('login')} />
-    : <LoginPage onNavigateToSignup={() => setAuthPage('signup')} />;
+  return <LoginPage />;
 };
 
 export default function App() {

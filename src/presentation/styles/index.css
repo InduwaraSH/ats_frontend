@@ -297,19 +297,14 @@ body::after {
   transition: stroke-dashoffset 1s ease-in-out;
 }
 
-/* Quick Upload Button hover and active states */
-#btn-mock-upload:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.22) !important;
-  color: #ffffff !important;
-  border-color: rgba(99, 102, 241, 0.45) !important;
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+/* Progress bar animation for indeterminate state */
+@keyframes progressPulse {
+  0%, 100% { opacity: 0.6; width: 15%; }
+  50% { opacity: 1; width: 45%; }
 }
 
-#btn-mock-upload:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: rgba(255, 255, 255, 0.02) !important;
-  color: var(--text-muted) !important;
-  border-color: var(--border-glass) !important;
+/* Spinner animation */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
-

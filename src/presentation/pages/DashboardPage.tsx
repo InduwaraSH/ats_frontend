@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCV } from '../contexts/CVContext';
+import type { CV } from '../../domain/entities/CV';
 
 import {
   LogOut,
@@ -24,20 +25,76 @@ export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
   const {
     jobDescription,
+    jobTitle,
+    jobId,
     cvs,
     selectedCV,
     loading,
     error,
+    uploadProgress,
     setJobDescription,
+    setJobTitle,
+    setJobId,
+    saveJobDetails,
     uploadCVs,
     deleteCV,
     setSelectedCV,
   } = useCV();
 
   const [jdText, setJdText] = useState(jobDescription);
+  const [titleText, setTitleText] = useState(jobTitle);
+  const [idText, setIdText] = useState(jobId);
+  const [uploadTitle, setUploadTitle] = useState(jobTitle);
+  const [uploadId, setUploadId] = useState(jobId);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Synchronize local states when fetched from the backend on load
+  useEffect(() => {
+    setJdText(jobDescription);
+  }, [jobDescription]);
+
+  useEffect(() => {
+    setTitleText(jobTitle);
+  }, [jobTitle]);
+
+  useEffect(() => {
+    setIdText(jobId);
+  }, [jobId]);
+
+  useEffect(() => {
+    setUploadTitle(jobTitle);
+  }, [jobTitle]);
+
+  useEffect(() => {
+    setUploadId(jobId);
+  }, [jobId]);
+
+  const handleSaveJob = async () => {
+    if (!idText.trim() || !titleText.trim() || !jdText.trim()) {
+      setSaveStatus('error');
+      setSaveMessage('Please fill in Job ID, Job Title, and Job Description.');
+      return;
+    }
+
+    setSaveStatus('saving');
+    setSaveMessage(null);
+    try {
+      await saveJobDetails(idText.trim(), titleText.trim(), jdText.trim());
+      setSaveStatus('success');
+      setSaveMessage('Job details saved successfully!');
+      setTimeout(() => {
+        setSaveStatus('idle');
+        setSaveMessage(null);
+      }, 4000);
+    } catch (err: any) {
+      setSaveStatus('error');
+      setSaveMessage(err.message || 'Failed to save job details.');
+    }
+  };
 
   // Synchronize internal text state with global context
   const handleJdChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -45,6 +102,78 @@ export const DashboardPage: React.FC = () => {
     setJobDescription(e.target.value);
     if (uploadError) setUploadError(null);
   };
+
+  const activeJobId = uploadId.trim() || jobId.trim();
+  const filteredCVs = cvs.filter((cv) => cv.jobId === activeJobId);
+  const above50 = filteredCVs.filter((cv) => cv.matchScore >= 50);
+  const below50 = filteredCVs.filter((cv) => cv.matchScore < 50);
+
+  const renderCandidateCard = (cv: CV) => {
+    const scoreColor = getScoreColor(cv.matchScore);
+    return (
+      <div
+        key={cv.id}
+        className="glass-card animate-fade-in"
+        style={styles.candidateCard}
+        onClick={() => setSelectedCV(cv)}
+      >
+        <div style={styles.cardLayout}>
+          {/* Radial score progress on left */}
+          <div style={styles.scoreContainer}>
+            <svg width="60" height="60" style={styles.svgRotate}>
+              <circle cx="30" cy="30" r="26" fill="transparent" stroke="rgba(255,255,255,0.03)" strokeWidth="4" />
+              <circle
+                cx="30"
+                cy="30"
+                r="26"
+                fill="transparent"
+                stroke={scoreColor}
+                strokeWidth="4"
+                strokeDasharray="163.3"
+                strokeDashoffset={163.3 - (163.3 * cv.matchScore) / 100}
+                strokeLinecap="round"
+                style={{ transition: 'stroke-dashoffset 1s ease-in-out' }}
+              />
+            </svg>
+            <span style={{ ...styles.scoreValue, color: scoreColor }}>
+              {cv.matchScore}
+            </span>
+          </div>
+
+          {/* Info block */}
+          <div style={styles.candInfo}>
+            <h4 style={styles.candName}>{cv.applicantName}</h4>
+            <div style={styles.metaRow}>
+              <FileText size={12} color="var(--text-muted)" />
+              <span style={styles.metaText} title={cv.fileName}>{cv.fileName}</span>
+              <span style={styles.metaSeparator}>•</span>
+              <span>{cv.fileSize}</span>
+            </div>
+            <div style={{ ...styles.metaRow, marginTop: '4px' }}>
+              <Clock size={12} color="var(--text-muted)" />
+              <span style={styles.metaText}>{cv.uploadedAt}</span>
+            </div>
+          </div>
+
+          {/* Card actions */}
+          <div style={styles.actions}>
+            <button
+              style={styles.deleteButton}
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteCV(cv.id);
+              }}
+              title="Remove candidate"
+            >
+              <Trash2 size={16} />
+            </button>
+            <ChevronRight size={18} color="var(--text-muted)" />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
 
   // Drag and Drop File Handlers
   const handleDrag = (e: React.DragEvent) => {
@@ -63,8 +192,8 @@ export const DashboardPage: React.FC = () => {
     setDragActive(false);
     setUploadError(null);
 
-    if (!jdText.trim()) {
-      setUploadError('Please paste a Job Description before uploading CVs.');
+    if (!uploadTitle.trim() || !uploadId.trim()) {
+      setUploadError('Please fill in Job Title and Job ID for Resumes.');
       return;
     }
 
@@ -83,22 +212,33 @@ export const DashboardPage: React.FC = () => {
         return;
       }
 
-      await uploadCVs(validFiles);
+      if (validFiles.length > 100) {
+        setUploadError('Maximum 100 files allowed per upload.');
+        return;
+      }
+
+      await uploadCVs(validFiles, uploadId.trim(), uploadTitle.trim());
     }
   };
 
   // File Select Input Handler
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setUploadError(null);
-    if (!jdText.trim()) {
-      setUploadError('Please paste a Job Description before uploading CVs.');
+
+    if (!uploadTitle.trim() || !uploadId.trim()) {
+      setUploadError('Please fill in Job Title and Job ID for Resumes.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
-      await uploadCVs(files);
+      if (files.length > 100) {
+        setUploadError('Maximum 100 files allowed per upload.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+      await uploadCVs(files, uploadId.trim(), uploadTitle.trim());
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -173,6 +313,69 @@ export const DashboardPage: React.FC = () => {
                 </div>
               </div>
 
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label className="form-label">Job Title</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. Senior Software Engineer"
+                  value={titleText}
+                  onChange={(e) => {
+                    setTitleText(e.target.value);
+                    setJobTitle(e.target.value);
+                  }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
+                <label className="form-label">Job ID</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. JOB-2026-001"
+                  value={idText}
+                  onChange={(e) => {
+                    setIdText(e.target.value);
+                    setJobId(e.target.value);
+                  }}
+                />
+              </div>
+
+              {/* Save Job Details Button & Status */}
+              <div style={{ marginBottom: '32px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                  className="btn-primary"
+                  onClick={handleSaveJob}
+                  disabled={saveStatus === 'saving'}
+                  style={{ width: '100%' }}
+                >
+                  {saveStatus === 'saving' ? 'Saving Job Details...' : 'Save Job Details'}
+                </button>
+                {saveMessage && (
+                  <div
+                    style={{
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      color: saveStatus === 'success' ? 'var(--accent-emerald)' : 'var(--accent-rose)',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: saveStatus === 'success' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(244, 63, 94, 0.08)',
+                      border: `1px solid ${saveStatus === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)'}`,
+                    }}
+                    className="animate-fade-in"
+                  >
+                    {saveStatus === 'success' ? (
+                      <CheckCircle2 size={16} color="var(--accent-emerald)" />
+                    ) : (
+                      <XCircle size={16} color="var(--accent-rose)" />
+                    )}
+                    <span>{saveMessage}</span>
+                  </div>
+                )}
+              </div>
+
               <div style={styles.panelHeader}>
                 <UploadCloud size={18} color="var(--accent-indigo)" />
                 <h3 style={styles.panelTitle}>Upload Resumes</h3>
@@ -180,6 +383,28 @@ export const DashboardPage: React.FC = () => {
               <p style={styles.panelDesc}>
                 Drag & drop candidate CVs (PDF, TXT, DOCX) to rank their compatibility.
               </p>
+
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label className="form-label">Job Title for Resumes</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. Senior Software Engineer"
+                  value={uploadTitle}
+                  onChange={(e) => setUploadTitle(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
+                <label className="form-label">Job ID for Resumes</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. JOB-2026-001"
+                  value={uploadId}
+                  onChange={(e) => setUploadId(e.target.value)}
+                />
+              </div>
 
               {/* Upload Drop Zone */}
               <div
@@ -213,25 +438,48 @@ export const DashboardPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Quick Mock Test Resumes */}
-              <div style={styles.quickUploadArea}>
-                <span style={styles.quickUploadText}>Want to test the platform instantly?</span>
-                <button
-                  id="btn-mock-upload"
-                  type="button"
-                  style={styles.quickUploadBtn}
-                  onClick={async (e) => {
-                    e.stopPropagation(); // Avoid triggering file selection dialog
-                    const mockFile1 = new File(["Kamal Perera\nSenior Software Engineer\nPython Django REST API Git Docker Clean Architecture"], "Kamal_Perera_Resume.pdf", { type: "application/pdf" });
-                    const mockFile2 = new File(["Roshan Silva\nSenior Frontend Developer\nReact TypeScript HTML CSS Git"], "Roshan_Silva_CV.txt", { type: "text/plain" });
-                    await uploadCVs([mockFile1, mockFile2]);
-                  }}
-                  disabled={loading || !jdText.trim()}
-                  title={!jdText.trim() ? "Please enter a Job Description first" : "Click to load sample candidates"}
-                >
-                  Load Sample Resumes
-                </button>
-              </div>
+              {/* Upload Progress Bar */}
+              {(loading && uploadProgress) && (
+                <div style={styles.progressContainer} className="animate-fade-in">
+                  <div style={styles.progressHeader}>
+                    <span style={styles.progressLabel}>
+                      Processing {uploadProgress.current} of {uploadProgress.total} files
+                    </span>
+                    <span style={styles.progressPercent}>
+                      {Math.round((uploadProgress.current / uploadProgress.total) * 100)}%
+                    </span>
+                  </div>
+                  <div style={styles.progressTrack}>
+                    <div
+                      style={{
+                        ...styles.progressBar,
+                        width: `${(uploadProgress.current / uploadProgress.total) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <div style={styles.progressFileName}>
+                    <FileText size={12} color="var(--text-muted)" />
+                    <span>{uploadProgress.fileName}</span>
+                    {uploadProgress.status === 'completed' ? (
+                      <CheckCircle2 size={14} color="var(--accent-emerald)" />
+                    ) : (
+                      <XCircle size={14} color="var(--accent-rose)" />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Loading state without progress (initial) */}
+              {(loading && !uploadProgress) && (
+                <div style={styles.progressContainer} className="animate-fade-in">
+                  <div style={styles.progressHeader}>
+                    <span style={styles.progressLabel}>Preparing upload...</span>
+                  </div>
+                  <div style={styles.progressTrack}>
+                    <div style={{ ...styles.progressBar, width: '15%', animation: 'progressPulse 1.5s ease-in-out infinite' }} />
+                  </div>
+                </div>
+              )}
 
               {/* Error messages */}
               {(uploadError || error) && (
@@ -275,74 +523,32 @@ export const DashboardPage: React.FC = () => {
             )}
 
             {/* Candidates Grid */}
-            <div style={styles.candidatesGrid}>
-              {cvs.map((cv) => {
-                const scoreColor = getScoreColor(cv.matchScore);
-                
-                return (
-                  <div
-                    key={cv.id}
-                    className="glass-card animate-fade-in"
-                    style={styles.candidateCard}
-                    onClick={() => setSelectedCV(cv)}
-                  >
-                    <div style={styles.cardLayout}>
-                      
-                      {/* Radial score progress on left */}
-                      <div style={styles.scoreContainer}>
-                        <svg width="60" height="60" style={styles.svgRotate}>
-                          <circle cx="30" cy="30" r="26" fill="transparent" stroke="rgba(255,255,255,0.03)" strokeWidth="4" />
-                          <circle
-                            cx="30"
-                            cy="30"
-                            r="26"
-                            fill="transparent"
-                            stroke={scoreColor}
-                            strokeWidth="4"
-                            strokeDasharray="163.3" /* 2 * pi * r = 163.3 */
-                            strokeDashoffset={163.3 - (163.3 * cv.matchScore) / 100}
-                            strokeLinecap="round"
-                            style={{ transition: 'stroke-dashoffset 1s ease-in-out' }}
-                          />
-                        </svg>
-                        <span style={{ ...styles.scoreValue, color: scoreColor }}>
-                          {cv.matchScore}
-                        </span>
-                      </div>
-
-                      {/* Info block */}
-                      <div style={styles.candInfo}>
-                        <h4 style={styles.candName}>{cv.applicantName}</h4>
-                        <div style={styles.metaRow}>
-                          <FileText size={12} color="var(--text-muted)" />
-                          <span style={styles.metaText} title={cv.fileName}>{cv.fileName}</span>
-                          <span style={styles.metaSeparator}>•</span>
-                          <span>{cv.fileSize}</span>
-                        </div>
-                        <div style={{ ...styles.metaRow, marginTop: '4px' }}>
-                          <Clock size={12} color="var(--text-muted)" />
-                          <span style={styles.metaText}>{cv.uploadedAt}</span>
-                        </div>
-                      </div>
-
-                      {/* Card actions */}
-                      <div style={styles.actions}>
-                        <button
-                          style={styles.deleteButton}
-                          onClick={(e) => {
-                            e.stopPropagation(); // Avoid opening modal
-                            deleteCV(cv.id);
-                          }}
-                          title="Remove candidate"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                        <ChevronRight size={18} color="var(--text-muted)" />
-                      </div>
-                    </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              {above50.length > 0 && (
+                <div>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: '600', textTransform: 'uppercase', color: 'var(--accent-emerald)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle2 size={16} color="var(--accent-emerald)" />
+                    Highly Compatible Candidates (Score ≥ 50)
+                    <span style={{ ...styles.countBadge, backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-emerald)' }}>{above50.length}</span>
+                  </h4>
+                  <div style={styles.candidatesGrid}>
+                    {above50.map(renderCandidateCard)}
                   </div>
-                );
-              })}
+                </div>
+              )}
+
+              {below50.length > 0 && (
+                <div>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: '600', textTransform: 'uppercase', color: 'var(--accent-rose)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <XCircle size={16} color="var(--accent-rose)" />
+                    Needs Review Candidates (Score &lt; 50)
+                    <span style={{ ...styles.countBadge, backgroundColor: 'rgba(244, 63, 94, 0.1)', color: 'var(--accent-rose)' }}>{below50.length}</span>
+                  </h4>
+                  <div style={styles.candidatesGrid}>
+                    {below50.map(renderCandidateCard)}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 
@@ -992,30 +1198,51 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(6, 9, 19, 0.4)',
   },
-  quickUploadArea: {
+  progressContainer: {
+    marginTop: '20px',
+    padding: '16px 20px',
+    borderRadius: 'var(--radius-md)',
+    backgroundColor: 'rgba(12, 18, 36, 0.6)',
+    border: '1px solid var(--border-glass)',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '10px',
+  },
+  progressHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressLabel: {
+    fontSize: '0.85rem',
+    fontWeight: '500',
+    color: 'var(--text-body)',
+  },
+  progressPercent: {
+    fontSize: '0.85rem',
+    fontWeight: '700',
+    color: 'var(--accent-indigo)',
+  },
+  progressTrack: {
+    width: '100%',
+    height: '6px',
+    borderRadius: 'var(--radius-full)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 'var(--radius-full)',
+    background: 'linear-gradient(90deg, var(--accent-indigo), var(--accent-purple))',
+    transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+    boxShadow: '0 0 12px rgba(99, 102, 241, 0.4)',
+  },
+  progressFileName: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: '12px',
-    marginTop: '16px',
-    padding: '12px',
-    borderRadius: 'var(--radius-md)',
-    backgroundColor: 'rgba(255, 255, 255, 0.01)',
-    border: '1px solid var(--border-glass)',
-  },
-  quickUploadText: {
-    fontSize: '0.82rem',
+    gap: '6px',
+    fontSize: '0.8rem',
     color: 'var(--text-muted)',
   },
-  quickUploadBtn: {
-    background: 'rgba(99, 102, 241, 0.1)',
-    border: '1px solid rgba(99, 102, 241, 0.25)',
-    color: 'var(--accent-indigo)',
-    padding: '6px 12px',
-    borderRadius: 'var(--radius-sm)',
-    fontSize: '0.8rem',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'var(--transition-smooth)',
-  },
 };
+

@@ -1,43 +1,43 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
-  /* Color Palette (Harmonious Premium Dark Theme) */
-  --bg-main: #060913;
-  --bg-surface: #0c1224;
-  --bg-surface-glass: rgba(13, 20, 38, 0.6);
-  --bg-card-glass: rgba(18, 28, 54, 0.45);
+  /* Color Palette (Harmonious Premium Light Theme) */
+  --bg-main: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-glass: rgba(255, 255, 255, 0.75);
+  --bg-card-glass: rgba(255, 255, 255, 0.8);
   
-  --border-glass: rgba(255, 255, 255, 0.06);
-  --border-glass-hover: rgba(255, 255, 255, 0.12);
-  --border-active: rgba(99, 102, 241, 0.4);
+  --border-glass: rgba(15, 23, 42, 0.08);
+  --border-glass-hover: rgba(15, 23, 42, 0.14);
+  --border-active: rgba(99, 102, 241, 0.5);
   
   /* Accent Colors */
-  --accent-indigo: #6366f1;
-  --accent-indigo-glow: rgba(99, 102, 241, 0.35);
-  --accent-purple: #8b5cf6;
-  --accent-purple-glow: rgba(139, 92, 246, 0.3);
-  --accent-emerald: #10b981;
-  --accent-emerald-glow: rgba(16, 185, 129, 0.2);
-  --accent-rose: #f43f5e;
-  --accent-rose-glow: rgba(244, 63, 94, 0.2);
-  --accent-amber: #f59e0b;
-  --accent-amber-glow: rgba(245, 158, 11, 0.2);
+  --accent-indigo: #4f46e5;
+  --accent-indigo-glow: rgba(79, 70, 229, 0.12);
+  --accent-purple: #7c3aed;
+  --accent-purple-glow: rgba(124, 58, 237, 0.12);
+  --accent-emerald: #059669;
+  --accent-emerald-glow: rgba(5, 150, 105, 0.08);
+  --accent-rose: #dc2626;
+  --accent-rose-glow: rgba(220, 38, 38, 0.08);
+  --accent-amber: #d97706;
+  --accent-amber-glow: rgba(217, 119, 6, 0.08);
   
   /* Text colors */
-  --text-title: #f8fafc;
-  --text-body: #cbd5e1;
+  --text-title: #0f172a;
+  --text-body: #334155;
   --text-muted: #64748b;
   
   /* Gradients */
   --grad-primary: linear-gradient(135deg, var(--accent-indigo), var(--accent-purple));
-  --grad-surface: linear-gradient(180deg, rgba(20, 30, 58, 0.6) 0%, rgba(10, 15, 30, 0.8) 100%);
-  --grad-glow: radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(248, 250, 252, 0.9) 100%);
+  --grad-glow: radial-gradient(circle at 50% 50%, rgba(79, 70, 229, 0.04) 0%, transparent 70%);
 
   /* UI Tokens */
   --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  --shadow-premium: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-  --shadow-glow: 0 0 25px rgba(99, 102, 241, 0.25);
-  --shadow-inner: inset 0 2px 4px 0 rgba(255, 255, 255, 0.05);
+  --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.01);
+  --shadow-glow: 0 0 20px rgba(79, 70, 229, 0.12);
+  --shadow-inner: inset 0 1px 2px 0 rgba(0, 0, 0, 0.01);
   
   --radius-sm: 8px;
   --radius-md: 12px;

@@ -11,4 +11,15 @@ export interface MatchResult {
   experienceSummary: string; // Summary of candidate's relevant experience
   educationSummary: string; // Summary of candidate's education and credentials
   summaryReport: string; // Dynamic narrative summarizing the candidate's strengths and suitability
+  github_projects?: {
+    name: string;
+    html_url: string;
+    description: string;
+    languages: string[];
+    topics: string[];
+    stars: number;
+    forks: number;
+    matching_skills: string[];
+    is_aligned: boolean;
+  }[];
 }

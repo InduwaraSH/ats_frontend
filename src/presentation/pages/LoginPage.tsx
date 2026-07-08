@@ -1,15 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { KeyRound, Mail, AlertTriangle, Loader2, UserPlus } from 'lucide-react';
+import { KeyRound, Mail, AlertTriangle, Loader2 } from 'lucide-react';
 
 // TODO: Remove this flag (and the credentials banner) before production release.
 const DEV_MODE = true;
 
-interface LoginPageProps {
-  onNavigateToSignup: () => void;
-}
-
-export const LoginPage: React.FC<LoginPageProps> = ({ onNavigateToSignup }) => {
+export const LoginPage: React.FC = () => {
   const { login, error, clearError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -122,19 +118,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigateToSignup }) => {
           </button>
         </form>
 
-        {/* Navigate to signup */}
-        <div style={styles.footer}>
-          <span style={styles.footerText}>Don&apos;t have an account?</span>
-          <button
-            type="button"
-            onClick={onNavigateToSignup}
-            disabled={isSubmitting}
-            style={styles.linkButton}
-          >
-            <UserPlus size={14} style={{ marginRight: '4px' }} />
-            Create Account
-          </button>
-        </div>
+
 
         {/* DEV-ONLY: remove before going to production */}
         {DEV_MODE && (
@@ -191,7 +175,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '40px 32px',
     zIndex: 1,
     border: '1px solid var(--border-glass)',
-    backgroundColor: 'rgba(12, 18, 36, 0.55)',
+    backgroundColor: 'var(--bg-card-glass)',
   },
   headerArea: {
     textAlign: 'center',
@@ -227,7 +211,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid var(--accent-rose)',
     borderRadius: 'var(--radius-sm)',
     padding: '12px 16px',
-    color: '#fca5a5',
+    color: 'var(--accent-rose)',
     fontSize: '0.88rem',
     marginBottom: '24px',
   },

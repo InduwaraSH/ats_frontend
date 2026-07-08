@@ -8,7 +8,7 @@ export class JobService implements IJobService {
   private API_BASE_URL = 'http://localhost:8000/api/v1';
 
   async saveJob(job: Job): Promise<Job> {
-    const response = await fetch(`${this.API_BASE_URL}/job`, {
+    const response = await fetch(`${this.API_BASE_URL}/job/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -76,7 +76,7 @@ export class JobService implements IJobService {
   }
 
   async listJobs(): Promise<Job[]> {
-    const response = await fetch(`${this.API_BASE_URL}/job`, {
+    const response = await fetch(`${this.API_BASE_URL}/job/`, {
       method: 'GET',
       credentials: 'include',
     });
@@ -103,6 +103,26 @@ export class JobService implements IJobService {
       createdAt: item.created_at,
       updatedAt: item.updated_at,
     }));
+  }
+
+  async deleteJob(jobId: string): Promise<void> {
+    const response = await fetch(`${this.API_BASE_URL}/job/${jobId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      let errorMessage = `Failed to delete job with ID ${jobId}`;
+      try {
+        const errData = await response.json();
+        if (errData?.detail) {
+          errorMessage = typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail);
+        }
+      } catch {
+        // use default
+      }
+      throw new Error(errorMessage);
+    }
   }
 }
 export const jobServiceInstance = new JobService();

@@ -1379,20 +1379,37 @@ export const DashboardPage: React.FC = () => {
                                 {proj.name}
                               </a>
                               
-                              {/* Match Indicator */}
-                              <span
-                                style={{
-                                  fontSize: '0.75rem',
-                                  fontWeight: '600',
-                                  padding: '2px 8px',
-                                  borderRadius: 'var(--radius-full)',
-                                  backgroundColor: proj.is_aligned ? 'rgba(16, 185, 129, 0.08)' : 'rgba(0, 0, 0, 0.04)',
-                                  color: proj.is_aligned ? 'var(--accent-emerald)' : 'var(--text-muted)',
-                                  border: proj.is_aligned ? '1px solid rgba(16, 185, 129, 0.15)' : '1px solid var(--border-glass)'
-                                }}
-                              >
-                                {proj.is_aligned ? 'Stack Aligned' : 'General Project'}
-                              </span>
+                              {/* Match and Contributed Indicators */}
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                {proj.is_fork && (
+                                  <span
+                                    style={{
+                                      fontSize: '0.75rem',
+                                      fontWeight: '600',
+                                      padding: '2px 8px',
+                                      borderRadius: 'var(--radius-full)',
+                                      backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                                      color: 'var(--accent-indigo)',
+                                      border: '1px solid rgba(99, 102, 241, 0.15)'
+                                    }}
+                                  >
+                                    Contributed Project
+                                  </span>
+                                )}
+                                <span
+                                  style={{
+                                    fontSize: '0.75rem',
+                                    fontWeight: '600',
+                                    padding: '2px 8px',
+                                    borderRadius: 'var(--radius-full)',
+                                    backgroundColor: proj.is_aligned ? 'rgba(16, 185, 129, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                                    color: proj.is_aligned ? 'var(--accent-emerald)' : 'var(--text-muted)',
+                                    border: proj.is_aligned ? '1px solid rgba(16, 185, 129, 0.15)' : '1px solid var(--border-glass)'
+                                  }}
+                                >
+                                  {proj.is_aligned ? 'Stack Aligned' : 'General Project'}
+                                </span>
+                              </div>
                             </div>
                             
                             {/* Description */}

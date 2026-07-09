@@ -4,6 +4,7 @@ import { CVService } from '../../infrastructure/services/CVService';
 import type { UploadProgress } from '../../application/services/ICVService';
 import { JobService } from '../../infrastructure/services/JobService';
 import type { Job } from '../../domain/entities/Job';
+import { useAuth } from './AuthContext';
 
 // Define context state schema
 interface CVContextType {
@@ -32,7 +33,6 @@ interface CVContextType {
 const getLinkedinUrl = (urls: string[], name: string): string | undefined => {
   const linkedinUrls = urls.filter((u) => u.toLowerCase().includes('linkedin.com'));
   if (linkedinUrls.length === 0) return undefined;
-  if (linkedinUrls.length === 1) return linkedinUrls[0];
 
   // Tokenize candidate name (split by space, strip non-alphanumeric, lower case)
   const nameParts = name
@@ -41,32 +41,58 @@ const getLinkedinUrl = (urls: string[], name: string): string | undefined => {
     .split(/\s+/)
     .filter((part) => part.length > 2); // only parts > 2 chars, e.g. sajith, sampath, dilhara
 
-  // Rank URLs based on match count
-  let bestUrl = linkedinUrls[0];
+  // Substrings of the candidate's name (first 3 characters of each part) to match initials/short names
+  const namePrefixes = nameParts.map(part => part.slice(0, 3)).filter(p => p.length >= 3);
+
+  // Rank URLs based on match score
+  let bestUrl: string | undefined = undefined;
   let maxScore = -1;
 
   for (const url of linkedinUrls) {
     const urlLower = url.toLowerCase();
     
     // Check if it is a personal profile URL (/in/ is standard, /posts/ or /feed/ are post links)
-    const isProfile = urlLower.includes('/in/');
+    const isProfile = urlLower.includes('/in/') || urlLower.includes('/pub/');
     const isPostOrShare = urlLower.includes('/posts/') || urlLower.includes('/feed/') || urlLower.includes('/share/');
     
     let score = 0;
     if (isProfile) score += 5; // Preference for profile URLs
-    if (isPostOrShare) score -= 3; // Demote posts/shares
+    if (isPostOrShare) score -= 10; // Heavily demote posts/shares
 
     // Count name matches
+    let matchesName = false;
     for (const part of nameParts) {
       if (urlLower.includes(part)) {
-        score += 10;
+        score += 15;
+        matchesName = true;
       }
+    }
+
+    // Count prefix matches (if not already fully matched)
+    if (!matchesName) {
+      for (const prefix of namePrefixes) {
+        if (urlLower.includes(prefix)) {
+          score += 10;
+          matchesName = true;
+        }
+      }
+    }
+
+    // If it has absolutely no match with the candidate's name/prefixes, demote it significantly
+    if (!matchesName) {
+      score -= 8;
     }
 
     if (score > maxScore) {
       maxScore = score;
       bestUrl = url;
     }
+  }
+
+  // If the best URL scored negative (i.e. it's a post/share or has no relation to the candidate's name),
+  // do not return it to prevent linking to a reference person's profile.
+  if (maxScore < 0) {
+    return undefined;
   }
 
   return bestUrl;
@@ -79,6 +105,7 @@ const cvService = new CVService();
 const jobService = new JobService();
 
 export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [jobDescription, setJobDescriptionState] = useState<string>('');
   const [jobTitle, setJobTitle] = useState<string>('');
   const [jobId, setJobId] = useState<string>('');
@@ -89,11 +116,21 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [jobsList, setJobsList] = useState<Job[]>([]);
 
-  // Fetch the latest job details and historical applications on mount
+  // Fetch the latest job details and historical applications when user signs in
   useEffect(() => {
-    fetchLatestJob();
-    loadEvaluatedCVs();
-  }, []);
+    if (user) {
+      fetchLatestJob();
+      loadEvaluatedCVs();
+    } else {
+      // Clear data on logout/when not authenticated
+      setJobId('');
+      setJobTitle('');
+      setJobDescriptionState('');
+      setCvs([]);
+      setSelectedCV(null);
+      setJobsList([]);
+    }
+  }, [user]);
 
   const loadEvaluatedCVs = async () => {
     try {

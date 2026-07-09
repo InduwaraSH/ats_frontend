@@ -1,6 +1,7 @@
 import React from 'react';
 import { AuthProvider, useAuth } from './presentation/contexts/AuthContext';
 import { CVProvider } from './presentation/contexts/CVContext';
+import { ToastProvider } from './presentation/contexts/ToastContext';
 import { LoginPage } from './presentation/pages/LoginPage';
 import { DashboardPage } from './presentation/pages/DashboardPage';
 import { Loader2 } from 'lucide-react';
@@ -24,17 +25,20 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // Route to dashboard or login
-  return user ? <DashboardPage /> : <LoginPage />;
+  if (user) return <DashboardPage />;
+
+  return <LoginPage />;
 };
 
 export default function App() {
   return (
-    <AuthProvider>
-      <CVProvider>
-        <AppContent />
-      </CVProvider>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <CVProvider>
+          <AppContent />
+        </CVProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 

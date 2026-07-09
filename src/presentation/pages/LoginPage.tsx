@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { KeyRound, Mail, AlertTriangle, Loader2 } from 'lucide-react';
 
+// TODO: Remove this flag (and the credentials banner) before production release.
+const DEV_MODE = true;
+
 export const LoginPage: React.FC = () => {
   const { login, error, clearError } = useAuth();
   const [email, setEmail] = useState('');
@@ -64,7 +67,7 @@ export const LoginPage: React.FC = () => {
                 id="email"
                 type="email"
                 className="form-control"
-                placeholder="admin@ats.com"
+                placeholder="you@company.com"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
@@ -115,11 +118,16 @@ export const LoginPage: React.FC = () => {
           </button>
         </form>
 
-        <div style={styles.infoBanner}>
-          <p style={styles.infoTitle}>Quick Access Credentials</p>
-          <code style={styles.codeText}>Username: admin@ats.com</code>
-          <code style={styles.codeText}>Password: 123456</code>
-        </div>
+
+
+        {/* DEV-ONLY: remove before going to production */}
+        {DEV_MODE && (
+          <div style={styles.devBanner}>
+            <p style={styles.devTitle}>Dev Credentials</p>
+            <code style={styles.devCode}>admin@ats.com</code>
+            <code style={styles.devCode}>123456</code>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -167,7 +175,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '40px 32px',
     zIndex: 1,
     border: '1px solid var(--border-glass)',
-    backgroundColor: 'rgba(12, 18, 36, 0.55)',
+    backgroundColor: 'var(--bg-card-glass)',
   },
   headerArea: {
     textAlign: 'center',
@@ -203,7 +211,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid var(--accent-rose)',
     borderRadius: 'var(--radius-sm)',
     padding: '12px 16px',
-    color: '#fca5a5',
+    color: 'var(--accent-rose)',
     fontSize: '0.88rem',
     marginBottom: '24px',
   },
@@ -225,25 +233,49 @@ const styles: Record<string, React.CSSProperties> = {
   spinner: {
     animation: 'spin 1s linear infinite',
   },
-  infoBanner: {
-    marginTop: '28px',
-    padding: '16px',
+  footer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    marginTop: '24px',
+  },
+  footerText: {
+    fontSize: '0.85rem',
+    color: 'var(--text-muted)',
+  },
+  linkButton: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    background: 'none',
+    border: 'none',
+    padding: '0',
+    cursor: 'pointer',
+    color: 'var(--accent-indigo)',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    fontFamily: 'inherit',
+    transition: 'var(--transition-fast)',
+  },
+  devBanner: {
+    marginTop: '16px',
+    padding: '12px 16px',
     borderRadius: 'var(--radius-md)',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    border: '1px solid var(--border-glass)',
+    backgroundColor: 'rgba(245, 158, 11, 0.06)',
+    border: '1px dashed rgba(245, 158, 11, 0.35)',
     display: 'flex',
     flexDirection: 'column',
-    gap: '6px',
+    gap: '4px',
   },
-  infoTitle: {
-    fontSize: '0.8rem',
+  devTitle: {
+    fontSize: '0.72rem',
     fontWeight: '600',
-    color: 'var(--text-body)',
+    color: 'var(--accent-amber)',
     textTransform: 'uppercase',
-    letterSpacing: '0.05em',
+    letterSpacing: '0.06em',
     marginBottom: '2px',
   },
-  codeText: {
+  devCode: {
     fontFamily: 'monospace',
     fontSize: '0.82rem',
     color: 'var(--text-muted)',

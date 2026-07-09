@@ -18,4 +18,9 @@ export interface IJobService {
    * Lists all jobs saved in the system.
    */
   listJobs(): Promise<Job[]>;
+
+  /**
+   * Deletes a specific job.
+   */
+  deleteJob(jobId: string): Promise<void>;
 }

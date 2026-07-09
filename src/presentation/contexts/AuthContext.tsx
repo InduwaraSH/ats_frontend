@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User } from '../../domain/entities/User';
-import { AuthService } from '../../infrastructure/services/AuthService';
+import { ApiAuthService } from '../../infrastructure/services/ApiAuthService';
+import { useToast } from './ToastContext';
 
 // Define context state schema
 interface AuthContextType {
@@ -8,21 +9,23 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
+  signup: (fullName: string, email: string, password: string, role: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Instantiate our authentication service
-const authService = new AuthService();
+// Use the real API-backed service
+const authService = new ApiAuthService();
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
 
-  // Validate session on app initialization
+  // Restore active session on app load
   useEffect(() => {
     const initializeAuth = async () => {
       try {
@@ -43,8 +46,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const authenticatedUser = await authService.login(email, password);
       setUser(authenticatedUser);
+      showToast('Welcome back!', 'success');
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signup = async (fullName: string, email: string, password: string, role: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const newUser = await authService.signup(fullName, email, password, role);
+      setUser(newUser);
+      showToast(`Account created! Welcome, ${newUser.name}!`, 'success');
+    } catch (err: any) {
+      setError(err.message || 'Registration failed');
       throw err;
     } finally {
       setLoading(false);
@@ -56,8 +75,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await authService.logout();
       setUser(null);
+      showToast('You have been signed out.', 'info');
     } catch (err: any) {
       console.error('Logout failed:', err);
+      showToast('Logout failed. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -66,16 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearError = () => setError(null);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        error,
-        login,
-        logout,
-        clearError,
-      }}
-    >
+    <AuthContext.Provider value={{ user, loading, error, login, signup, logout, clearError }}>
       {children}
     </AuthContext.Provider>
   );

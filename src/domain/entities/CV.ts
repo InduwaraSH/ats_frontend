@@ -14,4 +14,7 @@ export interface CV {
   uploadedAt: string;
   jobId?: string;
   jobTitle?: string;
+  urls?: string[];
+  githubUrl?: string;
+  linkedinUrl?: string;
 }

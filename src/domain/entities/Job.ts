@@ -8,4 +8,5 @@ export interface Job {
   description: string;
   createdAt?: string;
   updatedAt?: string;
+  createdWay?: string;
 }

@@ -85,6 +85,8 @@ export class CVService implements ICVService {
                 applicationId: data.application_id,
                 candidateName: data.candidate_name,
                 matchScore: data.match_score ?? 0,
+                urls: data.urls || [],
+                matchDetails: data.match_details,
               });
             }
 

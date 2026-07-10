@@ -14,6 +14,7 @@ interface CVContextType {
   cvs: CV[];
   selectedCV: CV | null;
   loading: boolean;
+  cvsLoading: boolean;
   error: string | null;
   uploadProgress: UploadProgress | null;
   jobsList: Job[];
@@ -28,6 +29,7 @@ interface CVContextType {
   deleteJob: (jobId: string) => Promise<void>;
   startNewJob: () => void;
   selectJob: (job: Job) => void;
+  loadEvaluatedCVs: (filterJobId?: string) => Promise<void>;
 }
 
 const getLinkedinUrl = (urls: string[], name: string): string | undefined => {
@@ -112,6 +114,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [cvs, setCvs] = useState<CV[]>([]);
   const [selectedCV, setSelectedCV] = useState<CV | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [cvsLoading, setCvsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [jobsList, setJobsList] = useState<Job[]>([]);
@@ -119,7 +122,8 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   // Fetch the latest job details and historical applications when user signs in
   useEffect(() => {
     if (user) {
-      fetchLatestJob();
+      fetchJobsList();
+      startNewJob();
       loadEvaluatedCVs();
     } else {
       // Clear data on logout/when not authenticated
@@ -132,9 +136,14 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   }, [user]);
 
-  const loadEvaluatedCVs = async () => {
+  const loadEvaluatedCVs = async (filterJobId?: string) => {
+    setCvsLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/applications/', {
+      const activeId = filterJobId ?? jobId;
+      const url = activeId 
+        ? `http://localhost:8000/api/v1/applications/?job_id=${encodeURIComponent(activeId)}` 
+        : 'http://localhost:8000/api/v1/applications/';
+      const response = await fetch(url, {
         credentials: 'include',
       });
       if (response.ok) {
@@ -172,9 +181,17 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           } : undefined
         }));
         setCvs(mappedCVs);
+        // Sync selectedCV with the new data to update UI details immediately
+        setSelectedCV(prev => {
+          if (!prev) return null;
+          const updated = mappedCVs.find(c => c.id === prev.id);
+          return updated || prev;
+        });
       }
     } catch (err) {
       console.error('Error loading evaluated CVs:', err);
+    } finally {
+      setCvsLoading(false);
     }
   };
 
@@ -189,8 +206,8 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     try {
       const jobs = await jobService.listJobs();
       const sorted = jobs.sort((a, b) => {
-        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
         return dateB - dateA;
       });
       setJobsList(sorted);
@@ -256,6 +273,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setJobId(job.jobId);
     setJobTitle(job.title);
     setJobDescriptionState(job.description);
+    loadEvaluatedCVs(job.jobId);
   };
 
   const deleteJob = async (idToDelete: string) => {
@@ -313,6 +331,21 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             }),
             jobId: uploadJobId,
             jobTitle: uploadJobTitle,
+            urls: progress.urls || [],
+            githubUrl: (progress.urls || []).find((u: string) => u.toLowerCase().includes('github.com')) || undefined,
+            linkedinUrl: getLinkedinUrl(progress.urls || [], progress.candidateName || progress.fileName.replace(/\.[^/.]+$/, '')),
+            matchDetails: progress.matchDetails ? {
+              id: progress.matchDetails.id || progress.matchDetails._id || progress.applicationId || '',
+              cvId: progress.matchDetails.cvId || progress.applicationId || '',
+              score: Math.round(progress.matchDetails.score || progress.matchScore || 0),
+              matchingSkills: progress.matchDetails.matchingSkills || [],
+              missingSkills: progress.matchDetails.missingSkills || [],
+              additionalAdvantages: progress.matchDetails.additionalAdvantages || [],
+              experienceSummary: progress.matchDetails.experienceSummary || '',
+              educationSummary: progress.matchDetails.educationSummary || '',
+              summaryReport: progress.matchDetails.summaryReport || '',
+              github_projects: progress.matchDetails.github_projects || [],
+            } : undefined
           };
           setCvs((prevCVs) => [newCV, ...prevCVs]);
         }
@@ -358,6 +391,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         cvs,
         selectedCV,
         loading,
+        cvsLoading,
         error,
         uploadProgress,
         jobsList,
@@ -372,6 +406,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         deleteJob,
         startNewJob,
         selectJob,
+        loadEvaluatedCVs,
       }}
     >
       {children}

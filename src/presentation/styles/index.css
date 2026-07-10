@@ -416,11 +416,11 @@ body::after {
 /* ─── Smooth Expand / Collapse Animations ─── */
 @keyframes slideDown {
   0%   { opacity: 0; transform: translateY(-10px); max-height: 0; }
-  100% { opacity: 1; transform: translateY(0);     max-height: 2000px; }
+  100% { opacity: 1; transform: translateY(0);     max-height: 30000px; }
 }
 
 @keyframes slideUp {
-  0%   { opacity: 1; transform: translateY(0);     max-height: 2000px; }
+  0%   { opacity: 1; transform: translateY(0);     max-height: 30000px; }
   100% { opacity: 0; transform: translateY(-10px); max-height: 0; }
 }
 

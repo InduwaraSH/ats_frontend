@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCV } from '../contexts/CVContext';
+import { useToast } from '../contexts/ToastContext';
 import type { CV } from '../../domain/entities/CV';
 
 import {
@@ -23,11 +24,13 @@ import {
   GitFork,
   Download,
   Plus,
-  ChevronDown
+  ChevronDown,
+  Search
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
+  const { showToast } = useToast();
   const {
     jobDescription,
     jobTitle,
@@ -35,6 +38,7 @@ export const DashboardPage: React.FC = () => {
     cvs,
     selectedCV,
     loading,
+    cvsLoading,
     error,
     uploadProgress,
     jobsList,
@@ -45,6 +49,7 @@ export const DashboardPage: React.FC = () => {
     deleteJob,
     startNewJob,
     selectJob,
+    loadEvaluatedCVs,
   } = useCV();
 
   const [jdText, setJdText] = useState(jobDescription);
@@ -61,12 +66,32 @@ export const DashboardPage: React.FC = () => {
   const [bulkMinScore, setBulkMinScore] = useState<number>(67);
   const [bulkMaxScore, setBulkMaxScore] = useState<number>(100);
   const [candidateSearch, setCandidateSearch] = useState('');
+  const [jobSearchQuery, setJobSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [currentPageBelow50, setCurrentPageBelow50] = useState(1);
   const [needsReviewExpanded, setNeedsReviewExpanded] = useState(false);
   const [activeModalTab, setActiveModalTab] = useState<'assessment' | 'pdf'>('assessment');
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [uploadZoneExpanded, setUploadZoneExpanded] = useState(false);
   const [specCardExpanded, setSpecCardExpanded] = useState(true);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    type: 'candidate' | 'job';
+    id: string;
+    name: string;
+  }>({
+    isOpen: false,
+    type: 'candidate',
+    id: '',
+    name: ''
+  });
+  const [similarityThreshold, setSimilarityThreshold] = useState(50);
+  const [isReEvaluating, setIsReEvaluating] = useState(false);
+  const [reEvalProgress, setReEvalProgress] = useState<{
+    current: number;
+    total: number;
+    name: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Synchronize local states when fetched from the backend on load
@@ -132,6 +157,17 @@ export const DashboardPage: React.FC = () => {
 
   const activeJobId = uploadId.trim() || jobId.trim();
   
+  // Filter jobs list for the sidebar search bar
+  const filteredJobsList = jobsList.filter(job => {
+    const query = jobSearchQuery.toLowerCase().trim();
+    if (!query) return true;
+    return (
+      job.title.toLowerCase().includes(query) ||
+      job.jobId.toLowerCase().includes(query) ||
+      (job.description && job.description.toLowerCase().includes(query))
+    );
+  });
+  
   // 1. Filter by active job
   const jobCVs = cvs.filter((cv) => cv.jobId === activeJobId);
   
@@ -160,9 +196,12 @@ export const DashboardPage: React.FC = () => {
   const below50 = sortedCVs.filter((cv) => cv.matchScore < 50);
 
   // 5. Pagination slicing for compatible candidates
-  const itemsPerPage = 10;
+  const itemsPerPage = 50;
   const totalPages = Math.ceil(above50.length / itemsPerPage);
   const paginatedAbove50 = above50.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const totalPagesBelow50 = Math.ceil(below50.length / itemsPerPage);
+  const paginatedBelow50 = below50.slice((currentPageBelow50 - 1) * itemsPerPage, currentPageBelow50 * itemsPerPage);
 
   const renderCandidateCard = (cv: CV) => {
     const scoreColor = getScoreColor(cv.matchScore || 0);
@@ -223,7 +262,12 @@ export const DashboardPage: React.FC = () => {
               style={styles.deleteButton}
               onClick={(e) => {
                 e.stopPropagation();
-                deleteCV(cv.id);
+                setDeleteConfirmation({
+                  isOpen: true,
+                  type: 'candidate',
+                  id: cv.id,
+                  name: cv.applicantName
+                });
               }}
               title="Remove candidate"
             >
@@ -349,6 +393,85 @@ export const DashboardPage: React.FC = () => {
     window.open(url, '_blank');
   };
 
+  const handleReEvaluate = async () => {
+    const targetJobId = activeJobId || jobId;
+    if (!targetJobId) {
+      showToast("Please select or save a job first.", "error");
+      return;
+    }
+    setIsReEvaluating(true);
+    setReEvalProgress({ current: 0, total: 0, name: 'Initializing...' });
+    
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    try {
+      const url = `http://localhost:8000/api/v1/applications/re-evaluate/stream?job_id=${encodeURIComponent(targetJobId)}&threshold=${similarityThreshold}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to initiate re-evaluation stream.');
+      }
+
+      reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Response body is not readable.');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+
+          try {
+            const data = JSON.parse(trimmed.slice(6));
+            if (data.type === 'init') {
+              setReEvalProgress({ current: 0, total: data.total, name: 'Starting evaluations...' });
+            } else if (data.type === 'progress') {
+              setReEvalProgress({
+                current: data.current,
+                total: data.total,
+                name: data.name
+              });
+            } else if (data.type === 'completed') {
+              showToast(`Successfully re-evaluated all ${data.total_processed} applications!`, 'success');
+            } else if (data.type === 'error') {
+              showToast(data.detail || 'Error during re-evaluation.', 'error');
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        }
+      }
+
+      // Finally reload CV list to refresh state in context
+      await loadEvaluatedCVs(targetJobId);
+    } catch (e: any) {
+      showToast(e.message || 'Error occurred during streaming.', 'error');
+    } finally {
+      setIsReEvaluating(false);
+      setReEvalProgress(null);
+      if (reader) {
+        try {
+          reader.releaseLock();
+        } catch {
+          // ignore
+        }
+      }
+    }
+  };
+
   const triggerFileInput = () => {
     fileInputRef.current?.click();
   };
@@ -391,8 +514,55 @@ export const DashboardPage: React.FC = () => {
 
         {/* Scrollable Saved Jobs list */}
         <div style={styles.sidebarHistory}>
-          <div style={styles.sidebarHistoryTitle}>Recent Jobs</div>
-          {jobsList.length === 0 ? (
+          <div style={{ ...styles.sidebarHistoryTitle, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>Recent Jobs</span>
+            {loading && (
+              <div style={{
+                border: '2px solid rgba(0,0,0,0.05)',
+                borderTop: '2px solid var(--accent-indigo)',
+                borderRadius: '50%',
+                width: '12px',
+                height: '12px',
+                animation: 'spin 0.8s linear infinite'
+              }}></div>
+            )}
+          </div>
+          
+          {/* Sidebar Search Bar */}
+          {jobsList.length > 0 && (
+            <div style={{ padding: '0 16px 12px 16px', position: 'relative' }}>
+              <input
+                type="text"
+                placeholder="Search jobs..."
+                value={jobSearchQuery}
+                onChange={(e) => setJobSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px 8px 30px',
+                  fontSize: '0.8rem',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-glass)',
+                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                  color: 'var(--text-title)',
+                  outline: 'none',
+                  transition: 'var(--transition-fast)'
+                }}
+                onFocus={(e) => e.target.style.borderColor = 'var(--accent-indigo)'}
+                onBlur={(e) => e.target.style.borderColor = 'var(--border-glass)'}
+              />
+              <Search 
+                size={12} 
+                style={{ 
+                  position: 'absolute', 
+                  left: '26px', 
+                  top: '10px', 
+                  color: 'var(--text-muted)' 
+                }} 
+              />
+            </div>
+          )}
+
+          {filteredJobsList.length === 0 ? (
             loading ? (
               <div style={styles.sidebarHistoryEmpty}>
                 <div style={{
@@ -407,11 +577,13 @@ export const DashboardPage: React.FC = () => {
                 <span>Loading...</span>
               </div>
             ) : (
-              <div style={styles.sidebarHistoryEmpty}>No saved jobs yet</div>
+              <div style={styles.sidebarHistoryEmpty}>
+                {jobSearchQuery ? 'No matching jobs found' : 'No saved jobs yet'}
+              </div>
             )
           ) : (
             <div style={styles.sidebarHistoryList}>
-              {jobsList.map((job) => (
+              {filteredJobsList.map((job) => (
                 <div
                   key={job.jobId}
                   className="sidebar-history-item-hover sidebar-history-item-el"
@@ -423,28 +595,62 @@ export const DashboardPage: React.FC = () => {
                   onClick={() => {
                     selectJob(job);
                     setCurrentPage(1);
+                    setCurrentPageBelow50(1);
                   }}
                 >
                   <Briefcase size={14} style={{ flexShrink: 0, opacity: job.jobId === activeJobId ? 1 : 0.6, marginTop: '2px' }} />
-                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, gap: '2px' }}>
                     <span style={{ ...styles.sidebarHistoryItemText, fontWeight: '600', color: job.jobId === activeJobId ? 'var(--accent-indigo)' : 'var(--text-title)' }} title={job.title}>
                       {job.title}
                     </span>
                     <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                       ID: {job.jobId}
                     </span>
+                    {job.createdWay === 'cv-filtering-system' ? (
+                      <span style={{
+                        alignSelf: 'flex-start',
+                        fontSize: '0.62rem',
+                        fontWeight: '700',
+                        textTransform: 'uppercase',
+                        color: 'var(--accent-emerald)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                        border: '1px solid rgba(16, 185, 129, 0.15)',
+                        padding: '1px 5px',
+                        borderRadius: '3px',
+                        marginTop: '2px',
+                        letterSpacing: '0.02em'
+                      }}>
+                        ATS
+                      </span>
+                    ) : (
+                      <span style={{
+                        alignSelf: 'flex-start',
+                        fontSize: '0.62rem',
+                        fontWeight: '700',
+                        textTransform: 'uppercase',
+                        color: 'var(--accent-indigo)',
+                        backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                        border: '1px solid rgba(99, 102, 241, 0.15)',
+                        padding: '1px 5px',
+                        borderRadius: '3px',
+                        marginTop: '2px',
+                        letterSpacing: '0.02em'
+                      }}>
+                        Web
+                      </span>
+                    )}
                   </div>
                   <button
                     className="delete-history-btn delete-job-btn"
                     style={styles.sidebarHistoryItemDelete}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm(`Are you sure you want to delete job "${job.title}"?`)) {
-                        deleteJob(job.jobId);
-                        if (job.jobId === activeJobId) {
-                          startNewJob();
-                        }
-                      }
+                      setDeleteConfirmation({
+                        isOpen: true,
+                        type: 'job',
+                        id: job.jobId,
+                        name: job.title
+                      });
                     }}
                   >
                     <Trash2 size={13} />
@@ -624,18 +830,52 @@ export const DashboardPage: React.FC = () => {
             /* ACTIVE STATE: Show Upload & Candidate List */
             <div style={{ maxWidth: '1000px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
               
-              {/* Job Specifications Card */}
-              <div className="glass-card animate-scale-up" style={{ padding: '20px 24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setSpecCardExpanded(!specCardExpanded)}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Job Specifications Card / Sleek Top Bar */}
+              <div 
+                className="glass-card animate-scale-up" 
+                style={{ 
+                  padding: jobCVs.length > 0 && !specCardExpanded ? '12px 20px' : '20px 24px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-glass)',
+                  transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                  boxShadow: jobCVs.length > 0 && !specCardExpanded ? '0 4px 12px rgba(0,0,0,0.05)' : 'var(--shadow-md)'
+                }}
+              >
+                <div 
+                  style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    cursor: 'pointer' 
+                  }} 
+                  onClick={() => setSpecCardExpanded(!specCardExpanded)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                     <Briefcase size={16} color="var(--accent-indigo)" />
-                    <span style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-title)', margin: 0 }}>
-                      Job Specifications
-                    </span>
-                    {jobCVs.length > 0 && (
-                      <span style={{ fontSize: '0.78rem', color: 'var(--accent-rose)', backgroundColor: 'var(--accent-rose-glow)', padding: '2px 8px', borderRadius: '4px', marginLeft: '8px', fontWeight: '600' }}>
-                        Locked (CVs Evaluated)
-                      </span>
+                    {jobCVs.length > 0 && !specCardExpanded ? (
+                      // Compact top bar header info
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.9rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Job Alignment:</span>
+                        <span style={{ fontWeight: '700', color: 'var(--text-title)' }}>{jobTitle}</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', backgroundColor: 'rgba(0,0,0,0.05)', padding: '1px 6px', borderRadius: '4px' }}>
+                          {jobId}
+                        </span>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--accent-emerald)', backgroundColor: 'rgba(16, 185, 129, 0.08)', padding: '2px 8px', borderRadius: '4px', fontWeight: '600', marginLeft: '6px', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
+                          {jobCVs.length} Candidates Evaluated
+                        </span>
+                      </div>
+                    ) : (
+                      // Default expanded header info
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-title)', margin: 0 }}>
+                          Job Specifications
+                        </span>
+                        {activeJobId && (
+                          <span style={{ fontSize: '0.78rem', color: 'var(--accent-rose)', backgroundColor: 'rgba(244, 63, 94, 0.08)', padding: '2px 8px', borderRadius: '4px', marginLeft: '8px', fontWeight: '600', border: '1px solid rgba(244, 63, 94, 0.15)' }}>
+                            Locked
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                   <button
@@ -648,89 +888,163 @@ export const DashboardPage: React.FC = () => {
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      gap: '4px',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      transition: 'background-color 0.2s'
                     }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.03)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
-                    {specCardExpanded ? 'Collapse' : 'Expand'}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      {specCardExpanded ? 'Collapse' : 'Expand'}
+                      <ChevronDown 
+                        size={14} 
+                        style={{ 
+                          transform: specCardExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.3s ease' 
+                        }} 
+                      />
+                    </span>
                   </button>
                 </div>
 
-                {specCardExpanded && (
-                  <div className="animate-fade-in" style={{ marginTop: '16px' }}>
-                    <div className="form-group" style={{ marginBottom: '12px' }}>
-                      <label className="form-label">Job Title</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="e.g. Senior Mobile App Developer"
-                        value={titleText}
-                        onChange={(e) => setTitleText(e.target.value)}
-                        disabled={jobCVs.length > 0}
-                      />
-                    </div>
-
-                    <div className="form-group" style={{ marginBottom: '12px' }}>
-                      <label className="form-label">Job ID (Read-only)</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="e.g. JOB_1234"
-                        value={idText}
-                        disabled
-                      />
-                    </div>
-
-                    <div className="form-group" style={{ marginBottom: '16px' }}>
-                      <label className="form-label">Job Description</label>
-                      <textarea
-                        className="form-control"
-                        style={styles.jdTextarea}
-                        placeholder="Paste job specifications here..."
-                        value={jdText}
-                        onChange={(e) => setJdText(e.target.value)}
-                        disabled={jobCVs.length > 0}
-                        rows={4}
-                      />
-                    </div>
-
-                    {jobCVs.length === 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <button
-                          className="btn-primary"
-                          onClick={handleSaveJob}
-                          disabled={saveStatus === 'saving'}
-                          style={{ padding: '8px 16px', fontSize: '0.85rem' }}
-                        >
-                          {saveStatus === 'saving' ? 'Updating Specifications...' : 'Update Job Specifications'}
-                        </button>
-                        {saveMessage && (
-                          <div
-                            style={{
-                              fontSize: '0.8rem',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              color: saveStatus === 'success' ? 'var(--accent-emerald)' : 'var(--accent-rose)',
-                              padding: '6px 10px',
-                              borderRadius: 'var(--radius-sm)',
-                              backgroundColor: saveStatus === 'success' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(244, 63, 94, 0.08)',
-                              border: `1px solid ${saveStatus === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)'}`,
-                              marginTop: '4px'
-                            }}
-                            className="animate-fade-in"
-                          >
-                            {saveStatus === 'success' ? (
-                              <CheckCircle2 size={14} color="var(--accent-emerald)" />
-                            ) : (
-                              <XCircle size={14} color="var(--accent-rose)" />
-                            )}
-                            <span>{saveMessage}</span>
+                <div 
+                  style={{
+                    maxHeight: specCardExpanded ? '1000px' : '0px',
+                    opacity: specCardExpanded ? 1 : 0,
+                    overflow: 'hidden',
+                    transition: 'max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, margin-top 0.4s ease',
+                    marginTop: specCardExpanded ? '16px' : '0px'
+                  }}
+                >
+                  <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '16px' }}>
+                    {activeJobId ? (
+                      /* Beautiful Read-only Layout when Job details are locked */
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                          <div style={{
+                            backgroundColor: 'rgba(99, 102, 241, 0.02)',
+                            border: '1px solid var(--border-glass)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '12px 16px',
+                            display: 'flex',
+                            flexDirection: 'column'
+                          }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: '600' }}>Job Title</span>
+                            <span style={{ fontSize: '0.95rem', fontWeight: '600', color: 'var(--text-title)' }}>{titleText}</span>
                           </div>
-                        )}
+                          
+                          <div style={{
+                            backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                            border: '1px solid var(--border-glass)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '12px 16px',
+                            display: 'flex',
+                            flexDirection: 'column'
+                          }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: '600' }}>Job ID</span>
+                            <span style={{ fontSize: '0.95rem', fontWeight: '600', color: 'var(--text-title)' }}>{idText}</span>
+                          </div>
+                        </div>
+
+                        <div style={{
+                          backgroundColor: 'rgba(0, 0, 0, 0.01)',
+                          border: '1px solid var(--border-glass)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '16px 20px',
+                          display: 'flex',
+                          flexDirection: 'column'
+                        }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: '600' }}>Job Description / Target Specifications</span>
+                          <p style={{
+                            margin: 0,
+                            fontSize: '0.88rem',
+                            color: 'var(--text-body)',
+                            lineHeight: '1.6',
+                            whiteSpace: 'pre-wrap'
+                          }}>
+                            {jdText}
+                          </p>
+                        </div>
                       </div>
+                    ) : (
+                      /* Edit Mode (when starting a new job, i.e., no evaluated CVs yet) */
+                      <>
+                        <div className="form-group" style={{ marginBottom: '12px' }}>
+                          <label className="form-label">Job Title</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            placeholder="e.g. Senior Mobile App Developer"
+                            value={titleText}
+                            onChange={(e) => setTitleText(e.target.value)}
+                            disabled={jobCVs.length > 0}
+                          />
+                        </div>
+
+                        <div className="form-group" style={{ marginBottom: '12px' }}>
+                          <label className="form-label">Job ID (Read-only)</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            placeholder="e.g. JOB_1234"
+                            value={idText}
+                            disabled
+                          />
+                        </div>
+
+                        <div className="form-group" style={{ marginBottom: '16px' }}>
+                          <label className="form-label">Job Description</label>
+                          <textarea
+                            className="form-control"
+                            style={styles.jdTextarea}
+                            placeholder="Paste job specifications here..."
+                            value={jdText}
+                            onChange={(e) => setJdText(e.target.value)}
+                            disabled={jobCVs.length > 0}
+                            rows={4}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <button
+                            className="btn-primary"
+                            onClick={handleSaveJob}
+                            disabled={saveStatus === 'saving'}
+                            style={{ padding: '8px 16px', fontSize: '0.85rem' }}
+                          >
+                            {saveStatus === 'saving' ? 'Updating Specifications...' : 'Update Job Specifications'}
+                          </button>
+                          {saveMessage && (
+                            <div
+                              style={{
+                                fontSize: '0.8rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                color: saveStatus === 'success' ? 'var(--accent-emerald)' : 'var(--accent-rose)',
+                                padding: '6px 10px',
+                                borderRadius: 'var(--radius-sm)',
+                                backgroundColor: saveStatus === 'success' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(244, 63, 94, 0.08)',
+                                border: `1px solid ${saveStatus === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)'}`,
+                                marginTop: '4px'
+                              }}
+                              className="animate-fade-in"
+                            >
+                              {saveStatus === 'success' ? (
+                                <CheckCircle2 size={14} color="var(--accent-emerald)" />
+                              ) : (
+                                <XCircle size={14} color="var(--accent-rose)" />
+                              )}
+                              <span>{saveMessage}</span>
+                            </div>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Collapsible/Toggleable CV Upload Dropzone */}
@@ -759,14 +1073,28 @@ export const DashboardPage: React.FC = () => {
                     >
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         {uploadZoneExpanded ? 'Collapse' : 'Expand Dropzone'}
-                        <ChevronDown size={14} style={{ transform: uploadZoneExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s ease' }} />
+                        <ChevronDown 
+                          size={14} 
+                          style={{ 
+                            transform: uploadZoneExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.3s ease' 
+                          }} 
+                        />
                       </span>
                     </button>
                   )}
                 </div>
 
-                {(cvs.length === 0 || uploadZoneExpanded) && (
-                  <div className="upload-zone-expand" style={{ marginTop: '16px' }}>
+                <div 
+                  style={{
+                    maxHeight: (cvs.length === 0 || uploadZoneExpanded) ? '1000px' : '0px',
+                    opacity: (cvs.length === 0 || uploadZoneExpanded) ? 1 : 0,
+                    overflow: 'hidden',
+                    transition: 'max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, margin-top 0.4s ease',
+                    marginTop: (cvs.length === 0 || uploadZoneExpanded) ? '16px' : '0px'
+                  }}
+                >
+                  <div style={{ borderTop: cvs.length > 0 ? '1px solid var(--border-glass)' : 'none', paddingTop: cvs.length > 0 ? '16px' : '0px' }}>
                     <p style={{ ...styles.panelDesc, marginBottom: '16px' }}>
                       Drag & drop candidate CVs (PDF, TXT, DOCX) to analyze their suitability.
                     </p>
@@ -856,7 +1184,7 @@ export const DashboardPage: React.FC = () => {
                       </div>
                     )}
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Error messages */}
@@ -868,7 +1196,25 @@ export const DashboardPage: React.FC = () => {
               )}
 
               {/* Evaluated Candidates Grid view in center */}
-              {cvs.length > 0 && (
+              {cvsLoading ? (
+                <div className="glass-card animate-scale-up" style={{ padding: '40px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px', minHeight: '300px' }}>
+                  <div style={{
+                    border: '3px solid var(--accent-indigo-glow)',
+                    borderTop: '3px solid var(--accent-indigo)',
+                    borderRadius: '50%',
+                    width: '36px',
+                    height: '36px',
+                    animation: 'spin 1s linear infinite'
+                  }}></div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.98rem', fontWeight: '750', color: 'var(--text-title)', marginBottom: '6px' }}>Loading evaluated resumes...</div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Fetching candidate profiles, scores, and alignment reports from database.</div>
+                  </div>
+                  <div style={{ width: '100%', maxWidth: '240px', height: '4px', backgroundColor: 'var(--accent-indigo-glow)', borderRadius: 'var(--radius-full)', overflow: 'hidden', position: 'relative' }}>
+                    <div style={{ position: 'absolute', height: '100%', width: '40%', backgroundColor: 'var(--accent-indigo)', borderRadius: 'var(--radius-full)', animation: 'progressPulse 1.5s ease-in-out infinite' }}></div>
+                  </div>
+                </div>
+              ) : cvs.length > 0 && (
                 <div className="glass-card" style={{ padding: '24px 32px' }}>
                   {/* Search Bar */}
                   <div style={{ marginBottom: '24px' }}>
@@ -879,6 +1225,7 @@ export const DashboardPage: React.FC = () => {
                       onChange={(e) => {
                         setCandidateSearch(e.target.value);
                         setCurrentPage(1);
+                        setCurrentPageBelow50(1);
                       }}
                       className="form-control"
                       style={{
@@ -970,8 +1317,35 @@ export const DashboardPage: React.FC = () => {
                           </span>
                         </button>
                         {needsReviewExpanded && (
-                          <div className="animate-slide-down" style={{ ...styles.candidatesGrid, marginTop: '20px' }}>
-                            {below50.map(renderCandidateCard)}
+                          <div className="animate-slide-down" style={{ marginTop: '20px' }}>
+                            <div style={styles.candidatesGrid}>
+                              {paginatedBelow50.map(renderCandidateCard)}
+                            </div>
+                            
+                            {/* Needs Review Pagination Controls */}
+                            {totalPagesBelow50 > 1 && (
+                              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px', marginTop: '24px' }}>
+                                <button
+                                  onClick={() => setCurrentPageBelow50(prev => Math.max(1, prev - 1))}
+                                  disabled={currentPageBelow50 === 1}
+                                  className="btn-secondary"
+                                  style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                                >
+                                  Previous
+                                </button>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                  Page {currentPageBelow50} of {totalPagesBelow50}
+                                </span>
+                                <button
+                                  onClick={() => setCurrentPageBelow50(prev => Math.min(totalPagesBelow50, prev + 1))}
+                                  disabled={currentPageBelow50 === totalPagesBelow50}
+                                  className="btn-secondary"
+                                  style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                                >
+                                  Next
+                                </button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -997,23 +1371,123 @@ export const DashboardPage: React.FC = () => {
             gap: '24px',
             overflowY: 'auto',
           }}>
-            {/* Score Filter */}
-            <div>
-              <div style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '14px' }}>
+            {/* 1. AI Screening Gate (Control Panel) */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              backgroundColor: 'rgba(99, 102, 241, 0.02)',
+              border: '1px solid var(--border-glass)',
+              borderRadius: 'var(--radius-md)',
+              padding: '16px 14px'
+            }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span>AI Screening Gate</span>
+                <span title="Minimum score required to trigger GPT scanning and GitHub project scraping." style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
+                  <Info size={10} />
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--accent-indigo)' }}>{similarityThreshold}%</span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Required Match</span>
+              </div>
+              <input 
+                type="range" 
+                min="10" 
+                max="90" 
+                step="5"
+                value={similarityThreshold} 
+                onChange={(e) => setSimilarityThreshold(Number(e.target.value))}
+                style={{
+                  width: '100%',
+                  accentColor: 'var(--accent-indigo)',
+                  cursor: 'pointer',
+                  margin: '4px 0'
+                }}
+              />
+              <button 
+                onClick={handleReEvaluate} 
+                disabled={isReEvaluating}
+                className="btn-secondary" 
+                style={{ 
+                  width: '100%', 
+                  padding: '9px', 
+                  fontSize: '0.82rem', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '6px',
+                  backgroundColor: 'rgba(99, 102, 241, 0.05)',
+                  border: '1px solid rgba(99, 102, 241, 0.15)',
+                  color: 'var(--accent-indigo)'
+                }}
+              >
+                {isReEvaluating ? (
+                  <>
+                    <div style={{
+                      border: '2px solid rgba(0,0,0,0.1)',
+                      borderTop: '2px solid var(--accent-indigo)',
+                      borderRadius: '50%',
+                      width: '12px',
+                      height: '12px',
+                      animation: 'spin 0.6s linear infinite'
+                    }}></div>
+                    <span>Re-evaluating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={13} />
+                    <span>Re-evaluate Resumes</span>
+                  </>
+                )}
+              </button>
+              {reEvalProgress && reEvalProgress.total > 0 && (
+                <div className="animate-fade-in" style={{ marginTop: '4px', padding: '10px 12px', backgroundColor: 'rgba(99, 102, 241, 0.03)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-glass)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '5px' }}>
+                    <span>Re-evaluating: {reEvalProgress.current}/{reEvalProgress.total}</span>
+                    <span style={{ fontWeight: '700', color: 'var(--accent-indigo)' }}>
+                      {Math.round((reEvalProgress.current / reEvalProgress.total) * 100)}%
+                    </span>
+                  </div>
+                  <div style={{ width: '100%', height: '4px', backgroundColor: 'rgba(0, 0, 0, 0.05)', borderRadius: '2px', overflow: 'hidden', marginBottom: '6px' }}>
+                    <div style={{ width: `${(reEvalProgress.current / reEvalProgress.total) * 100}%`, height: '100%', backgroundColor: 'var(--accent-indigo)', borderRadius: '2px', transition: 'width 0.3s ease' }}></div>
+                  </div>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                    Candidate: <strong style={{ color: 'var(--text-title)' }}>{reEvalProgress.name}</strong>
+                  </div>
+                </div>
+              )}
+              {reEvalProgress && reEvalProgress.total === 0 && (
+                <div className="animate-fade-in" style={{ marginTop: '4px', padding: '8px 10px', backgroundColor: 'rgba(0, 0, 0, 0.02)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-glass)', fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                  {reEvalProgress.name}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Candidate Export (ZIP score filter) */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              border: '1px solid var(--border-glass)',
+              borderRadius: 'var(--radius-md)',
+              padding: '16px 14px'
+            }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 ZIP Score Filter
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--accent-indigo)' }}>{bulkMinScore}%</span>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>to</span>
                 <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--accent-indigo)' }}>{bulkMaxScore}%</span>
               </div>
-              <div className="double-slider-container" style={{ width: '100%', marginBottom: '6px' }}>
+              <div className="double-slider-container" style={{ width: '100%', margin: '4px 0 2px 0' }}>
                 <div className="double-slider-track" />
                 <div className="double-slider-range" style={{ left: `${bulkMinScore}%`, width: `${bulkMaxScore - bulkMinScore}%` }} />
                 <input type="range" min="0" max="100" value={bulkMinScore} onChange={handleMinChange} className="double-slider-input" />
                 <input type="range" min="0" max="100" value={bulkMaxScore} onChange={handleMaxChange} className="double-slider-input" />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: 'var(--text-muted)' }}>
                 <span>0%</span><span>100%</span>
               </div>
               <button onClick={handleBulkDownload} className="btn-primary" style={{ width: '100%', padding: '9px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
@@ -1023,7 +1497,6 @@ export const DashboardPage: React.FC = () => {
               <div style={{ 
                 fontSize: '0.74rem', 
                 color: 'var(--text-muted)', 
-                marginTop: '10px', 
                 textAlign: 'center', 
                 backgroundColor: 'rgba(0, 0, 0, 0.02)', 
                 padding: '6px 8px', 
@@ -1034,10 +1507,17 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Candidate Stats */}
-            <div>
-              <div style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '14px' }}>
-                Candidates
+            {/* 3. Screening Summary (Candidate Stats) */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              border: '1px solid var(--border-glass)',
+              borderRadius: 'var(--radius-md)',
+              padding: '16px 14px'
+            }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Candidates Summary
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', backgroundColor: 'rgba(5, 150, 105, 0.06)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(5, 150, 105, 0.15)' }}>
@@ -1111,37 +1591,133 @@ export const DashboardPage: React.FC = () => {
         <div style={styles.modalOverlay} className="animate-fade-in">
           <div
             className="glass-panel animate-scale-up"
-            style={{ ...styles.modalContent, maxWidth: '420px', padding: '32px', textAlign: 'center', alignItems: 'center', display: 'flex', flexDirection: 'column', gap: '20px' }}
+            style={{ 
+              ...styles.modalContent, 
+              maxWidth: '440px', 
+              height: 'auto',
+              padding: '36px 32px', 
+              textAlign: 'center', 
+              alignItems: 'center', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '24px',
+              border: '1px solid var(--border-glass)',
+              boxShadow: '0 20px 40px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95))'
+            }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-              <CheckCircle2 size={36} color="var(--accent-emerald)" />
+            {/* Soft Glowing Green Success Icon Container */}
+            <div style={{
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(99, 102, 241, 0.1))',
+              boxShadow: '0 0 30px rgba(16, 185, 129, 0.25)',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+              marginBottom: '4px'
+            }}>
+              <CheckCircle2 size={42} color="var(--accent-emerald)" className="animate-pulse" />
             </div>
+            
             <div>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-title)', marginBottom: '8px' }}>CV Processing Complete</h3>
-              <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                All uploaded CVs have been parsed and assessed.
+              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--text-title)', marginBottom: '8px', letterSpacing: '-0.01em' }}>CV Processing Complete</h3>
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.6', margin: 0, padding: '0 10px' }}>
+                All uploaded candidate resumes have been successfully parsed, matched, and compatibility reports generated.
               </p>
             </div>
-            <div style={{ width: '100%', backgroundColor: 'rgba(0,0,0,0.02)', border: '1px solid var(--border-glass)', borderRadius: 'var(--radius-md)', padding: '16px', display: 'flex', justifyContent: 'space-around' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--text-title)' }}>{uploadSummary.total}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Total</div>
+            
+            {/* Visual Stats Cards Grid */}
+            <div style={{ display: 'flex', gap: '12px', width: '100%', marginTop: '4px' }}>
+              {/* Total Card */}
+              <div style={{
+                flex: 1,
+                padding: '16px 8px',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(99, 102, 241, 0.04)',
+                border: '1px solid rgba(99, 102, 241, 0.12)',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}>
+                <span style={{ fontSize: '1.75rem', fontWeight: '850', color: 'var(--accent-indigo)', letterSpacing: '-0.02em', lineHeight: '1.1' }}>
+                  {uploadSummary.total}
+                </span>
+                <span style={{ fontSize: '0.7rem', fontWeight: '700', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                  Total
+                </span>
               </div>
-              <div style={{ borderLeft: '1px solid var(--border-glass)' }} />
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--accent-emerald)' }}>{uploadSummary.success}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Succeeded</div>
+              
+              {/* Succeeded Card */}
+              <div style={{
+                flex: 1,
+                padding: '16px 8px',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(16, 185, 129, 0.04)',
+                border: '1px solid rgba(16, 185, 129, 0.12)',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}>
+                <span style={{ fontSize: '1.75rem', fontWeight: '850', color: 'var(--accent-emerald)', letterSpacing: '-0.02em', lineHeight: '1.1' }}>
+                  {uploadSummary.success}
+                </span>
+                <span style={{ fontSize: '0.7rem', fontWeight: '700', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                  Succeeded
+                </span>
               </div>
-              <div style={{ borderLeft: '1px solid var(--border-glass)' }} />
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--accent-rose)' }}>{uploadSummary.failed}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Failed</div>
+              
+              {/* Failed Card */}
+              <div style={{
+                flex: 1,
+                padding: '16px 8px',
+                borderRadius: 'var(--radius-md)',
+                background: uploadSummary.failed > 0 ? 'rgba(244, 63, 94, 0.04)' : 'rgba(255, 255, 255, 0.01)',
+                border: uploadSummary.failed > 0 ? '1px solid rgba(244, 63, 94, 0.2)' : '1px solid var(--border-glass)',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}>
+                <span style={{ fontSize: '1.75rem', fontWeight: '850', color: uploadSummary.failed > 0 ? 'var(--accent-rose)' : 'var(--text-muted)', letterSpacing: '-0.02em', lineHeight: '1.1' }}>
+                  {uploadSummary.failed}
+                </span>
+                <span style={{ fontSize: '0.7rem', fontWeight: '700', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                  Failed
+                </span>
               </div>
             </div>
+            
+            {/* Done Action Button with Premium Hover Gradient Glow */}
             <button
               className="btn-primary"
               onClick={() => setUploadSummary(null)}
-              style={{ width: '100%', padding: '12px' }}
+              style={{
+                width: '100%',
+                padding: '14px',
+                fontWeight: '700',
+                fontSize: '0.92rem',
+                letterSpacing: '0.02em',
+                borderRadius: 'var(--radius-md)',
+                background: 'linear-gradient(135deg, var(--accent-indigo), rgba(99, 102, 241, 0.85))',
+                boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease-in-out'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 6px 20px rgba(99, 102, 241, 0.45)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 15px rgba(99, 102, 241, 0.3)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
             >
               Done / View Results
             </button>
@@ -1526,6 +2102,118 @@ export const DashboardPage: React.FC = () => {
               </a>
               <button className="btn-secondary" onClick={() => setSelectedCV(null)} style={{ padding: '10px 20px' }}>
                 Close Assessment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Delete Confirmation Modal */}
+      {deleteConfirmation.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.4)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999
+        }} className="animate-fade-in" onClick={() => setDeleteConfirmation({ isOpen: false, type: 'candidate', id: '', name: '' })}>
+          <div style={{
+            width: '90%',
+            maxWidth: '400px',
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--border-glass)',
+            borderRadius: 'var(--radius-md)',
+            padding: '24px',
+            boxShadow: 'var(--shadow-premium)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }} className="animate-scale-up" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--accent-rose)'
+              }}>
+                <Trash2 size={18} />
+              </div>
+              <h3 style={{
+                margin: 0,
+                fontSize: '1.1rem',
+                fontWeight: '700',
+                color: 'var(--text-title)'
+              }}>
+                {deleteConfirmation.type === 'job' ? 'Delete Job Alignment' : 'Remove Candidate'}
+              </h3>
+            </div>
+            
+            <p style={{
+              margin: 0,
+              fontSize: '0.88rem',
+              color: 'var(--text-body)',
+              lineHeight: '1.5'
+            }}>
+              Are you sure you want to delete <strong>{deleteConfirmation.name}</strong>? This action cannot be undone and will permanently delete associated records.
+            </p>
+            
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              marginTop: '8px'
+            }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setDeleteConfirmation({ isOpen: false, type: 'candidate', id: '', name: '' })}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (deleteConfirmation.type === 'job') {
+                    await deleteJob(deleteConfirmation.id);
+                    if (deleteConfirmation.id === activeJobId) {
+                      startNewJob();
+                    }
+                  } else {
+                    await deleteCV(deleteConfirmation.id);
+                  }
+                  setDeleteConfirmation({ isOpen: false, type: 'candidate', id: '', name: '' });
+                }}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  borderRadius: 'var(--radius-md)',
+                  border: 'none',
+                  backgroundColor: 'var(--accent-rose)',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  transition: 'var(--transition-fast)',
+                  boxShadow: '0 2px 4px rgba(244, 63, 94, 0.2)'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(0.95)'}
+                onMouseLeave={(e) => e.currentTarget.style.filter = 'none'}
+              >
+                Delete
               </button>
             </div>
           </div>
@@ -1942,9 +2630,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'grid',
     gridTemplateColumns: '1fr',
     gap: '16px',
-    maxHeight: 'calc(100vh - 200px)',
-    overflowY: 'auto',
-    paddingRight: '4px',
   },
   candidateCard: {
     padding: '16px 20px',

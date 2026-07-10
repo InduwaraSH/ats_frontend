@@ -13,6 +13,8 @@ export interface UploadProgress {
   applicationId?: string;
   candidateName?: string;
   matchScore?: number;
+  urls?: string[];
+  matchDetails?: any;
 }
 
 /**

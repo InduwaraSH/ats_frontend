@@ -7,7 +7,7 @@ export interface UploadProgress {
   current: number;
   total: number;
   fileName: string;
-  status: 'completed' | 'failed';
+  status: 'completed' | 'failed' | 'uploading' | 'uploaded';
   error?: string;
   candidateId?: string;
   applicationId?: string;

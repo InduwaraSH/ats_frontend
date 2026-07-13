@@ -1587,7 +1587,38 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* 3. Floating progress notification toast popup (Google Drive/ChatGPT style) */}
-      {uploadProgress && (
+      {uploadProgress && uploadProgress.status === 'uploaded' && (
+        <div style={styles.floatingProgressCard} className="animate-scale-up">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+            <CheckCircle2 size={16} style={{ color: 'var(--accent-emerald)' }} />
+            <span style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--accent-emerald)' }}>
+              Files uploaded successfully!
+            </span>
+          </div>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', lineHeight: '1.5' }}>
+            All {uploadProgress.total} file(s) received by the server. Processing has started in the background.
+          </p>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'rgba(16, 185, 129, 0.08)',
+            border: '1px solid rgba(16, 185, 129, 0.2)',
+          }}>
+            <CheckCircle2 size={13} style={{ color: 'var(--accent-emerald)', flexShrink: 0 }} />
+            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-emerald)' }}>
+              Safe to close this tab — evaluation will continue on the server
+            </span>
+          </div>
+          <div style={{ ...styles.progressBarTrack, marginTop: '12px' }}>
+            <div style={{ ...styles.progressBarFill, width: '100%', background: 'var(--accent-emerald)' }} />
+          </div>
+        </div>
+      )}
+
+      {uploadProgress && (uploadProgress.status === 'completed' || uploadProgress.status === 'failed') && (
         <div style={styles.floatingProgressCard} className="animate-scale-up">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1608,6 +1639,17 @@ export const DashboardPage: React.FC = () => {
               }}
             />
           </div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            marginTop: '8px',
+          }}>
+            <CheckCircle2 size={11} style={{ color: 'var(--accent-emerald)', flexShrink: 0 }} />
+            <span style={{ fontSize: '0.68rem', fontWeight: '500', color: 'var(--text-muted)' }}>
+              Safe to close tab — processing continues on the server
+            </span>
+          </div>
         </div>
       )}
 
@@ -1616,8 +1658,11 @@ export const DashboardPage: React.FC = () => {
         <div style={styles.floatingProgressCard} className="animate-scale-up">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Clock size={16} className="animate-spin" style={{ color: 'var(--accent-indigo)' }} />
-            <span style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--text-title)' }}>Preparing uploads...</span>
+            <span style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--text-title)' }}>Uploading files to server...</span>
           </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px', marginBottom: '0' }}>
+            Please keep this tab open until the upload finishes.
+          </p>
           <div style={{ ...styles.progressBarTrack, marginTop: '12px' }}>
             <div style={{ ...styles.progressBarFill, width: '20%', animation: 'progressPulse 1.5s ease-in-out infinite' }} />
           </div>

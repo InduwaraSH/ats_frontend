@@ -3,13 +3,17 @@ import type { MatchResult } from '../../domain/entities/MatchResult';
 
 /**
  * Real implementation of ICVService that connects to the FastAPI backend.
- * Uses SSE (Server-Sent Events) for real-time upload progress tracking.
+ * Uses database polling for upload progress tracking (resilient to tab closure).
  */
 export class CVService implements ICVService {
   private API_BASE_URL = 'http://localhost:8000/api/v1';
 
   /**
-   * Uploads CV files to the backend and streams progress via SSE.
+   * Uploads CV files to the backend and polls for progress.
+   *
+   * The backend accepts the files, creates placeholder application documents,
+   * and processes them in a background task. This method polls a status
+   * endpoint every 3 seconds until all files are processed.
    */
   async uploadCVs(
     files: File[],
@@ -24,95 +28,102 @@ export class CVService implements ICVService {
     formData.append('job_id', jobId);
     formData.append('job_title', jobTitle);
 
-    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    // ----- Phase 1: Submit files and get batch_id back immediately -----
+    const response = await fetch(`${this.API_BASE_URL}/candidates/upload`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
 
-    try {
-      const response = await fetch(`${this.API_BASE_URL}/candidates/upload`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        let errorMessage = 'Upload failed';
-        try {
-          const errData = await response.json();
-          if (errData?.detail) {
-            errorMessage = typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail);
-          }
-        } catch {
-          // use default error message
+    if (!response.ok) {
+      let errorMessage = 'Upload failed';
+      try {
+        const errData = await response.json();
+        if (errData?.detail) {
+          errorMessage = typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail);
         }
-        throw new Error(errorMessage);
+      } catch {
+        // use default error message
       }
-
-      // Read the SSE stream
-      reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Response body is not readable.');
-      }
-
-      const decoder = new TextDecoder();
-      let totalSuccess = 0;
-      let totalFailed = 0;
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Parse SSE events from buffer
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data: ')) continue;
-
-          try {
-            const data = JSON.parse(trimmed.slice(6));
-
-            if (data.type === 'progress' && onProgress) {
-              onProgress({
-                current: data.current,
-                total: data.total,
-                fileName: data.file_name,
-                status: data.status,
-                error: data.error,
-                candidateId: data.candidate_id,
-                applicationId: data.application_id,
-                candidateName: data.candidate_name,
-                matchScore: data.match_score ?? 0,
-                urls: data.urls || [],
-                matchDetails: data.match_details,
-              });
-            }
-
-            if (data.type === 'complete') {
-              totalSuccess = data.total_success ?? 0;
-              totalFailed = data.total_failed ?? 0;
-            }
-          } catch {
-            // Skip malformed SSE lines
-          }
-        }
-      }
-
-      return { totalSuccess, totalFailed };
-    } catch (error: any) {
-      console.error('Error during CV upload process:', error);
-      throw new Error(error.message || 'Network error or upload failed.');
-    } finally {
-      if (reader) {
-        try {
-          reader.releaseLock();
-        } catch {
-          // ignore error if reader was already closed/released
-        }
-      }
+      throw new Error(errorMessage);
     }
+
+    const { batch_id, total_files } = await response.json();
+
+    // ----- Signal: files are safely on the server, tab can be closed -----
+    if (onProgress) {
+      onProgress({
+        current: 0,
+        total: total_files,
+        fileName: '',
+        status: 'uploaded',
+      });
+    }
+
+    // ----- Phase 2: Poll for progress until batch completes -----
+    const POLL_INTERVAL_MS = 3000;
+
+    // Track which application IDs we have already reported to onProgress
+    const reportedAppIds = new Set<string>();
+
+    return new Promise<{ totalSuccess: number; totalFailed: number }>((resolve, reject) => {
+      const poll = async () => {
+        try {
+          const statusRes = await fetch(
+            `${this.API_BASE_URL}/candidates/upload/status/${batch_id}`,
+            { credentials: 'include' },
+          );
+
+          if (!statusRes.ok) {
+            // Non-fatal: retry on next interval
+            console.warn('Polling status failed, will retry...');
+            return;
+          }
+
+          const data = await statusRes.json();
+
+          // Report progress for newly completed/failed applications
+          if (onProgress && data.applications) {
+            for (const app of data.applications) {
+              if (
+                (app.status === 'completed' || app.status === 'failed') &&
+                !reportedAppIds.has(app.application_id)
+              ) {
+                reportedAppIds.add(app.application_id);
+                onProgress({
+                  current: reportedAppIds.size,
+                  total: total_files,
+                  fileName: app.file_name,
+                  status: app.status as 'completed' | 'failed',
+                  error: app.status === 'failed' ? 'Processing failed' : undefined,
+                  applicationId: app.application_id,
+                  candidateName: app.candidate_name,
+                  matchScore: app.match_score ?? 0,
+                  urls: app.urls || [],
+                  matchDetails: app.match_details,
+                });
+              }
+            }
+          }
+
+          // Check if batch is done
+          if (data.status === 'completed' || data.status === 'completed_with_errors') {
+            clearInterval(intervalId);
+            resolve({
+              totalSuccess: data.success_count ?? 0,
+              totalFailed: data.fail_count ?? 0,
+            });
+          }
+        } catch (err) {
+          console.warn('Error during upload status poll:', err);
+          // Don't reject — just retry on next interval
+        }
+      };
+
+      // Run first poll immediately, then every POLL_INTERVAL_MS
+      poll();
+      const intervalId = setInterval(poll, POLL_INTERVAL_MS);
+    });
   }
 
   /**

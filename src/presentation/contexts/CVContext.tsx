@@ -153,7 +153,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           fileName: app.file_name,
           fileSize: '',
           applicantName: app.candidate_name || 'Unknown',
-          status: app.status === 'completed' ? 'completed' : 'failed',
+          status: app.status === 'completed' ? 'completed' : (app.status === 'pending' || app.status === 'processing') ? 'processing' as any : 'failed',
           matchScore: Number(app.match_score || 0),
           uploadedAt: new Date(app.created_at).toLocaleDateString('en-US', {
             year: 'numeric',

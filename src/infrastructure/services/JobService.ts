@@ -43,6 +43,7 @@ export class JobService implements IJobService {
       createdAt: savedData.created_at,
       updatedAt: savedData.updated_at,
       createdWay: savedData.created_way,
+      daysRemaining: savedData.days_remaining,
     };
   }
 
@@ -74,6 +75,7 @@ export class JobService implements IJobService {
       createdAt: data.created_at,
       updatedAt: data.updated_at,
       createdWay: data.created_way,
+      daysRemaining: data.days_remaining,
     };
   }
 
@@ -105,6 +107,7 @@ export class JobService implements IJobService {
       createdAt: item.created_at,
       updatedAt: item.updated_at,
       createdWay: item.created_way,
+      daysRemaining: item.days_remaining,
     }));
   }
 

@@ -9,4 +9,5 @@ export interface Job {
   createdAt?: string;
   updatedAt?: string;
   createdWay?: string;
+  daysRemaining?: number;
 }

@@ -156,6 +156,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   const activeJobId = uploadId.trim() || jobId.trim();
+  const activeJob = jobsList.find(job => job.jobId === activeJobId);
   
   // Filter jobs list for the sidebar search bar
   const filteredJobsList = jobsList.filter(job => {
@@ -603,9 +604,20 @@ export const DashboardPage: React.FC = () => {
                     <span style={{ ...styles.sidebarHistoryItemText, fontWeight: '600', color: job.jobId === activeJobId ? 'var(--accent-indigo)' : 'var(--text-title)' }} title={job.title}>
                       {job.title}
                     </span>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      ID: {job.jobId}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      <span>ID: {job.jobId}</span>
+                      {job.daysRemaining !== undefined && (
+                        <>
+                          <span style={{ fontSize: '0.6rem', opacity: 0.5 }}>•</span>
+                          <span style={{ 
+                            color: job.daysRemaining <= 5 ? '#f87171' : 'var(--text-muted)',
+                            fontWeight: job.daysRemaining <= 5 ? '700' : 'normal'
+                          }}>
+                            {job.daysRemaining}d left
+                          </span>
+                        </>
+                      )}
+                    </div>
                     {job.createdWay === 'cv-filtering-system' ? (
                       <span style={{
                         alignSelf: 'flex-start',
@@ -860,6 +872,19 @@ export const DashboardPage: React.FC = () => {
                         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', backgroundColor: 'rgba(0,0,0,0.05)', padding: '1px 6px', borderRadius: '4px' }}>
                           {jobId}
                         </span>
+                        {activeJob?.daysRemaining !== undefined && (
+                          <span style={{ 
+                            fontSize: '0.78rem', 
+                            color: activeJob.daysRemaining <= 5 ? '#f87171' : 'var(--text-muted)', 
+                            backgroundColor: 'rgba(255, 255, 255, 0.03)', 
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            fontWeight: '600',
+                            border: activeJob.daysRemaining <= 5 ? '1px solid rgba(248, 113, 113, 0.2)' : '1px solid var(--border-glass)'
+                          }}>
+                            {activeJob.daysRemaining}d left
+                          </span>
+                        )}
                         <span style={{ fontSize: '0.78rem', color: 'var(--accent-emerald)', backgroundColor: 'rgba(16, 185, 129, 0.08)', padding: '2px 8px', borderRadius: '4px', fontWeight: '600', marginLeft: '6px', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
                           {jobCVs.length} Candidates Evaluated
                         </span>
@@ -873,6 +898,19 @@ export const DashboardPage: React.FC = () => {
                         {activeJobId && (
                           <span style={{ fontSize: '0.78rem', color: 'var(--accent-rose)', backgroundColor: 'rgba(244, 63, 94, 0.08)', padding: '2px 8px', borderRadius: '4px', marginLeft: '8px', fontWeight: '600', border: '1px solid rgba(244, 63, 94, 0.15)' }}>
                             Locked
+                          </span>
+                        )}
+                        {activeJob?.daysRemaining !== undefined && (
+                          <span style={{ 
+                            fontSize: '0.78rem', 
+                            color: activeJob.daysRemaining <= 5 ? '#f87171' : 'var(--text-muted)', 
+                            backgroundColor: 'rgba(255, 255, 255, 0.03)', 
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            fontWeight: '600',
+                            border: activeJob.daysRemaining <= 5 ? '1px solid rgba(248, 113, 113, 0.2)' : '1px solid var(--border-glass)'
+                          }}>
+                            Expires in {activeJob.daysRemaining} days
                           </span>
                         )}
                       </div>

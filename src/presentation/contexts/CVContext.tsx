@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { CV } from '../../domain/entities/CV';
 import { CVService } from '../../infrastructure/services/CVService';
 import type { UploadProgress } from '../../application/services/ICVService';
@@ -30,6 +30,7 @@ interface CVContextType {
   startNewJob: () => void;
   selectJob: (job: Job) => void;
   loadEvaluatedCVs: (filterJobId?: string) => Promise<void>;
+  extendJobLifespan: (jobId: string, days: number) => Promise<void>;
 }
 
 const getLinkedinUrl = (urls: string[], name: string): string | undefined => {
@@ -118,13 +119,32 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [jobsList, setJobsList] = useState<Job[]>([]);
+  const autoCloseTimeoutRef = useRef<any>(null);
 
   // Fetch the latest job details and historical applications when user signs in
   useEffect(() => {
     if (user) {
       fetchJobsList();
-      startNewJob();
-      loadEvaluatedCVs();
+      
+      const savedBatchId = localStorage.getItem('active_cv_batch_id');
+      const savedTotal = localStorage.getItem('active_cv_batch_total');
+      const savedJobId = localStorage.getItem('active_cv_batch_job_id');
+      const savedJobTitle = localStorage.getItem('active_cv_batch_job_title');
+      const savedJobDesc = localStorage.getItem('active_cv_batch_job_desc');
+      
+      if (savedBatchId && savedTotal && savedJobId && savedJobTitle) {
+        setJobId(savedJobId);
+        setJobTitle(savedJobTitle);
+        if (savedJobDesc) {
+          setJobDescriptionState(savedJobDesc);
+        }
+        loadEvaluatedCVs(savedJobId);
+        const total = parseInt(savedTotal, 10);
+        resumeBatchMonitoring(savedBatchId, total, savedJobId, savedJobTitle);
+      } else {
+        startNewJob();
+        loadEvaluatedCVs();
+      }
     } else {
       // Clear data on logout/when not authenticated
       setJobId('');
@@ -267,6 +287,16 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setJobId('');
     setJobTitle('');
     setJobDescriptionState('');
+    if (autoCloseTimeoutRef.current) {
+      clearTimeout(autoCloseTimeoutRef.current);
+      autoCloseTimeoutRef.current = null;
+    }
+    localStorage.removeItem('active_cv_batch_id');
+    localStorage.removeItem('active_cv_batch_total');
+    localStorage.removeItem('active_cv_batch_job_id');
+    localStorage.removeItem('active_cv_batch_job_title');
+    localStorage.removeItem('active_cv_batch_job_desc');
+    setUploadProgress(null);
   };
 
   const selectJob = (job: Job) => {
@@ -274,6 +304,16 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setJobTitle(job.title);
     setJobDescriptionState(job.description);
     loadEvaluatedCVs(job.jobId);
+    if (autoCloseTimeoutRef.current) {
+      clearTimeout(autoCloseTimeoutRef.current);
+      autoCloseTimeoutRef.current = null;
+    }
+    localStorage.removeItem('active_cv_batch_id');
+    localStorage.removeItem('active_cv_batch_total');
+    localStorage.removeItem('active_cv_batch_job_id');
+    localStorage.removeItem('active_cv_batch_job_title');
+    localStorage.removeItem('active_cv_batch_job_desc');
+    setUploadProgress(null);
   };
 
   const deleteJob = async (idToDelete: string) => {
@@ -303,6 +343,10 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       return;
     }
 
+    if (autoCloseTimeoutRef.current) {
+      clearTimeout(autoCloseTimeoutRef.current);
+      autoCloseTimeoutRef.current = null;
+    }
     setLoading(true);
     setError(null);
     setUploadProgress(null);
@@ -310,6 +354,13 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     try {
       const result = await cvService.uploadCVs(files, uploadJobId, uploadJobTitle, (progress) => {
         setUploadProgress(progress);
+        if (progress.batchId) {
+          localStorage.setItem('active_cv_batch_id', progress.batchId);
+          localStorage.setItem('active_cv_batch_total', progress.total.toString());
+          localStorage.setItem('active_cv_batch_job_id', uploadJobId);
+          localStorage.setItem('active_cv_batch_job_title', uploadJobTitle);
+          localStorage.setItem('active_cv_batch_job_desc', jobDescription);
+        }
 
         // Build a CV entity for each completed file and add to the list
         if (progress.status === 'completed') {
@@ -363,7 +414,100 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       throw err;
     } finally {
       setLoading(false);
-      setUploadProgress(null);
+      localStorage.removeItem('active_cv_batch_id');
+      localStorage.removeItem('active_cv_batch_total');
+      localStorage.removeItem('active_cv_batch_job_id');
+      localStorage.removeItem('active_cv_batch_job_title');
+      localStorage.removeItem('active_cv_batch_job_desc');
+      autoCloseTimeoutRef.current = setTimeout(() => {
+        setUploadProgress(null);
+        autoCloseTimeoutRef.current = null;
+      }, 3000);
+    }
+  };
+
+  /**
+   * Resumes monitoring of an active background batch processing job on reconnect/reload.
+   */
+  const resumeBatchMonitoring = async (batchId: string, total: number, savedJobId: string, savedJobTitle: string) => {
+    setLoading(true);
+    setError(null);
+    setUploadProgress({
+      current: 0,
+      total: total,
+      fileName: '',
+      status: 'uploaded',
+      currentStage: 'Reconnecting to background task...',
+      batchId: batchId
+    });
+
+    try {
+      const result = await cvService.pollBatchStatus(batchId, total, (progress) => {
+        setUploadProgress(progress);
+
+        // Build a CV entity for each completed file and add to the list
+        if (progress.status === 'completed') {
+          const newCV: CV = {
+            id: progress.applicationId ?? `cv_${Date.now()}_${progress.current}`,
+            fileName: progress.fileName,
+            fileSize: '',
+            applicantName:
+              progress.candidateName ??
+              progress.fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '),
+            status: 'completed',
+            matchScore: progress.matchScore ?? 0,
+            uploadedAt: new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            jobId: savedJobId,
+            jobTitle: savedJobTitle,
+            urls: progress.urls || [],
+            githubUrl: (progress.urls || []).find((u: string) => u.toLowerCase().includes('github.com')) || undefined,
+            linkedinUrl: getLinkedinUrl(progress.urls || [], progress.candidateName || progress.fileName.replace(/\.[^/.]+$/, '')),
+            matchDetails: progress.matchDetails ? {
+              id: progress.matchDetails.id || progress.matchDetails._id || progress.applicationId || '',
+              cvId: progress.matchDetails.cvId || progress.applicationId || '',
+              score: Math.round(progress.matchDetails.score || progress.matchScore || 0),
+              matchingSkills: progress.matchDetails.matchingSkills || [],
+              missingSkills: progress.matchDetails.missingSkills || [],
+              additionalAdvantages: progress.matchDetails.additionalAdvantages || [],
+              experienceSummary: progress.matchDetails.experienceSummary || '',
+              educationSummary: progress.matchDetails.educationSummary || '',
+              summaryReport: progress.matchDetails.summaryReport || '',
+              github_projects: progress.matchDetails.github_projects || [],
+            } : undefined
+          };
+          setCvs((prevCVs) => {
+            // Check if this CV is already in the list to avoid duplicate rendering on reconnect
+            if (prevCVs.some(c => c.id === newCV.id)) return prevCVs;
+            return [newCV, ...prevCVs];
+          });
+        }
+      });
+
+      // Reload evaluated CVs to pull full match_details/github_projects from DB
+      await loadEvaluatedCVs(savedJobId);
+
+      if (result.totalFailed > 0) {
+        setError(`${result.totalFailed} file(s) failed to process.`);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error monitoring progress.');
+    } finally {
+      setLoading(false);
+      localStorage.removeItem('active_cv_batch_id');
+      localStorage.removeItem('active_cv_batch_total');
+      localStorage.removeItem('active_cv_batch_job_id');
+      localStorage.removeItem('active_cv_batch_job_title');
+      localStorage.removeItem('active_cv_batch_job_desc');
+      autoCloseTimeoutRef.current = setTimeout(() => {
+        setUploadProgress(null);
+        autoCloseTimeoutRef.current = null;
+      }, 3000);
     }
   };
 
@@ -379,6 +523,24 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       }
     } catch (err) {
       console.error('Delete CV failed:', err);
+    }
+  };
+
+  /**
+   * Extends the lifespan of a specific job by a number of days.
+   */
+  const extendJobLifespan = async (jobId: string, days: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const updatedJob = await jobService.extendJob(jobId, days);
+      setJobsList((prevJobs) =>
+        prevJobs.map((j) => (j.jobId === jobId ? updatedJob : j))
+      );
+    } catch (err: any) {
+      setError(err.message || 'Failed to extend job lifespan.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -407,6 +569,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         startNewJob,
         selectJob,
         loadEvaluatedCVs,
+        extendJobLifespan,
       }}
     >
       {children}

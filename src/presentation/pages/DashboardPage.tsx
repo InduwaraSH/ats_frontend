@@ -50,7 +50,20 @@ export const DashboardPage: React.FC = () => {
     startNewJob,
     selectJob,
     loadEvaluatedCVs,
+    extendJobLifespan,
   } = useCV();
+
+  const [extensionModal, setExtensionModal] = useState<{
+    isOpen: boolean;
+    jobId: string;
+    jobTitle: string;
+    daysToExtend: number;
+  }>({
+    isOpen: false,
+    jobId: '',
+    jobTitle: '',
+    daysToExtend: 10,
+  });
 
   const [jdText, setJdText] = useState(jobDescription);
   const [titleText, setTitleText] = useState(jobTitle);
@@ -62,6 +75,7 @@ export const DashboardPage: React.FC = () => {
   const [dragActive, setDragActive] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSummary, setUploadSummary] = useState<{ total: number; success: number; failed: number } | null>(null);
+  const [dismissProgress, setDismissProgress] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [bulkMinScore, setBulkMinScore] = useState<number>(67);
   const [bulkMaxScore, setBulkMaxScore] = useState<number>(100);
@@ -114,6 +128,12 @@ export const DashboardPage: React.FC = () => {
   useEffect(() => {
     setUploadId(jobId);
   }, [jobId]);
+
+  useEffect(() => {
+    if (uploadProgress) {
+      setDismissProgress(false);
+    }
+  }, [uploadProgress]);
 
   const handleSaveJob = async () => {
     if (!idText.trim() || !titleText.trim() || !jdText.trim()) {
@@ -599,7 +619,41 @@ export const DashboardPage: React.FC = () => {
                     setCurrentPageBelow50(1);
                   }}
                 >
-                  <Briefcase size={14} style={{ flexShrink: 0, opacity: job.jobId === activeJobId ? 1 : 0.6, marginTop: '2px' }} />
+                  {job.createdWay === 'cv-filtering-system' ? (
+                    <span style={{
+                      flexShrink: 0,
+                      fontSize: '0.62rem',
+                      fontWeight: '700',
+                      textTransform: 'uppercase',
+                      color: 'var(--accent-emerald)',
+                      backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                      border: '1px solid rgba(16, 185, 129, 0.15)',
+                      padding: '2px 5px',
+                      borderRadius: '3px',
+                      marginTop: '2px',
+                      letterSpacing: '0.02em',
+                      alignSelf: 'flex-start'
+                    }}>
+                      ATS
+                    </span>
+                  ) : (
+                    <span style={{
+                      flexShrink: 0,
+                      fontSize: '0.62rem',
+                      fontWeight: '700',
+                      textTransform: 'uppercase',
+                      color: 'var(--accent-indigo)',
+                      backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                      border: '1px solid rgba(99, 102, 241, 0.15)',
+                      padding: '2px 5px',
+                      borderRadius: '3px',
+                      marginTop: '2px',
+                      letterSpacing: '0.02em',
+                      alignSelf: 'flex-start'
+                    }}>
+                      Web
+                    </span>
+                  )}
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, gap: '2px' }}>
                     <span style={{ ...styles.sidebarHistoryItemText, fontWeight: '600', color: job.jobId === activeJobId ? 'var(--accent-indigo)' : 'var(--text-title)' }} title={job.title}>
                       {job.title}
@@ -618,39 +672,6 @@ export const DashboardPage: React.FC = () => {
                         </>
                       )}
                     </div>
-                    {job.createdWay === 'cv-filtering-system' ? (
-                      <span style={{
-                        alignSelf: 'flex-start',
-                        fontSize: '0.62rem',
-                        fontWeight: '700',
-                        textTransform: 'uppercase',
-                        color: 'var(--accent-emerald)',
-                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                        border: '1px solid rgba(16, 185, 129, 0.15)',
-                        padding: '1px 5px',
-                        borderRadius: '3px',
-                        marginTop: '2px',
-                        letterSpacing: '0.02em'
-                      }}>
-                        ATS
-                      </span>
-                    ) : (
-                      <span style={{
-                        alignSelf: 'flex-start',
-                        fontSize: '0.62rem',
-                        fontWeight: '700',
-                        textTransform: 'uppercase',
-                        color: 'var(--accent-indigo)',
-                        backgroundColor: 'rgba(99, 102, 241, 0.08)',
-                        border: '1px solid rgba(99, 102, 241, 0.15)',
-                        padding: '1px 5px',
-                        borderRadius: '3px',
-                        marginTop: '2px',
-                        letterSpacing: '0.02em'
-                      }}>
-                        Web
-                      </span>
-                    )}
                   </div>
                   <button
                     className="delete-history-btn delete-job-btn"
@@ -719,10 +740,100 @@ export const DashboardPage: React.FC = () => {
         {/* Header Bar */}
         <header style={styles.mainHeader}>
           {activeJobId ? (
-            <div style={styles.mainHeaderJobInfo}>
-              <Briefcase size={16} color="var(--accent-indigo)" />
-              <span style={styles.mainHeaderJobTitle}>{jobTitle}</span>
-              <span style={styles.mainHeaderJobId}>({activeJobId})</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', flex: 1 }}>
+              <div style={styles.mainHeaderJobInfo}>
+                <Briefcase size={16} color="var(--accent-indigo)" />
+                <span style={styles.mainHeaderJobTitle}>{jobTitle}</span>
+                <span style={styles.mainHeaderJobId}>({activeJobId})</span>
+              </div>
+
+              {activeJob?.daysRemaining !== undefined && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '6px' }}>
+                  <span style={{ 
+                    fontSize: '0.75rem', 
+                    color: activeJob.daysRemaining <= 5 ? '#f87171' : 'var(--text-muted)', 
+                    backgroundColor: 'rgba(255, 255, 255, 0.03)', 
+                    padding: '2px 8px', 
+                    borderRadius: '4px', 
+                    fontWeight: '600',
+                    border: activeJob.daysRemaining <= 5 ? '1px solid rgba(248, 113, 113, 0.2)' : '1px solid var(--border-glass)'
+                  }}>
+                    {activeJob.daysRemaining}d left
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExtensionModal({
+                        isOpen: true,
+                        jobId: activeJob.jobId,
+                        jobTitle: activeJob.title,
+                        daysToExtend: 10
+                      });
+                    }}
+                    style={{
+                      fontSize: '0.68rem',
+                      color: 'var(--accent-indigo)',
+                      backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                      border: '1px solid rgba(99, 102, 241, 0.15)',
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.15)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.08)'}
+                  >
+                    Extend
+                  </button>
+                </div>
+              )}
+
+              {jobCVs.length > 0 && (
+                <>
+                  <span style={{ 
+                    fontSize: '0.75rem', 
+                    color: 'var(--accent-emerald)', 
+                    backgroundColor: 'rgba(16, 185, 129, 0.08)', 
+                    padding: '2px 8px', 
+                    borderRadius: '4px', 
+                    fontWeight: '600', 
+                    border: '1px solid rgba(16, 185, 129, 0.15)' 
+                  }}>
+                    {jobCVs.length} Evaluated
+                  </span>
+                  
+                  <button
+                    onClick={() => setSpecCardExpanded(!specCardExpanded)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--accent-indigo)',
+                      fontSize: '0.75rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      transition: 'background-color 0.2s',
+                      marginLeft: '12px'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.03)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <span>{specCardExpanded ? 'Hide Specs' : 'Show Specs'}</span>
+                    <ChevronDown 
+                      size={12} 
+                      style={{ 
+                        transform: specCardExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.3s ease' 
+                      }} 
+                    />
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             <div style={styles.mainHeaderJobInfo}>
@@ -842,120 +953,45 @@ export const DashboardPage: React.FC = () => {
             /* ACTIVE STATE: Show Upload & Candidate List */
             <div style={{ maxWidth: '1000px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
               
-              {/* Job Specifications Card / Sleek Top Bar */}
-              <div 
-                className="glass-card animate-scale-up" 
-                style={{ 
-                  padding: jobCVs.length > 0 && !specCardExpanded ? '12px 20px' : '20px 24px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-glass)',
-                  transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                  boxShadow: jobCVs.length > 0 && !specCardExpanded ? '0 4px 12px rgba(0,0,0,0.05)' : 'var(--shadow-md)'
-                }}
-              >
+              {/* Job Specifications Card */}
+              {(!activeJobId || specCardExpanded) && (
                 <div 
+                  className="glass-card animate-scale-up" 
                   style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    cursor: 'pointer' 
-                  }} 
-                  onClick={() => setSpecCardExpanded(!specCardExpanded)}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                    <Briefcase size={16} color="var(--accent-indigo)" />
-                    {jobCVs.length > 0 && !specCardExpanded ? (
-                      // Compact top bar header info
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', fontSize: '0.9rem' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Job Alignment:</span>
-                        <span style={{ fontWeight: '700', color: 'var(--text-title)' }}>{jobTitle}</span>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', backgroundColor: 'rgba(0,0,0,0.05)', padding: '1px 6px', borderRadius: '4px' }}>
-                          {jobId}
-                        </span>
-                        {activeJob?.daysRemaining !== undefined && (
-                          <span style={{ 
-                            fontSize: '0.78rem', 
-                            color: activeJob.daysRemaining <= 5 ? '#f87171' : 'var(--text-muted)', 
-                            backgroundColor: 'rgba(255, 255, 255, 0.03)', 
-                            padding: '2px 8px', 
-                            borderRadius: '4px', 
-                            fontWeight: '600',
-                            border: activeJob.daysRemaining <= 5 ? '1px solid rgba(248, 113, 113, 0.2)' : '1px solid var(--border-glass)'
-                          }}>
-                            {activeJob.daysRemaining}d left
-                          </span>
-                        )}
-                        <span style={{ fontSize: '0.78rem', color: 'var(--accent-emerald)', backgroundColor: 'rgba(16, 185, 129, 0.08)', padding: '2px 8px', borderRadius: '4px', fontWeight: '600', marginLeft: '6px', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
-                          {jobCVs.length} Candidates Evaluated
-                        </span>
-                      </div>
-                    ) : (
-                      // Default expanded header info
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-title)', margin: 0 }}>
-                          Job Specifications
-                        </span>
-                        {activeJobId && (
-                          <span style={{ fontSize: '0.78rem', color: 'var(--accent-rose)', backgroundColor: 'rgba(244, 63, 94, 0.08)', padding: '2px 8px', borderRadius: '4px', marginLeft: '8px', fontWeight: '600', border: '1px solid rgba(244, 63, 94, 0.15)' }}>
-                            Locked
-                          </span>
-                        )}
-                        {activeJob?.daysRemaining !== undefined && (
-                          <span style={{ 
-                            fontSize: '0.78rem', 
-                            color: activeJob.daysRemaining <= 5 ? '#f87171' : 'var(--text-muted)', 
-                            backgroundColor: 'rgba(255, 255, 255, 0.03)', 
-                            padding: '2px 8px', 
-                            borderRadius: '4px', 
-                            fontWeight: '600',
-                            border: activeJob.daysRemaining <= 5 ? '1px solid rgba(248, 113, 113, 0.2)' : '1px solid var(--border-glass)'
-                          }}>
-                            Expires in {activeJob.daysRemaining} days
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--accent-indigo)',
-                      fontSize: '0.8rem',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      transition: 'background-color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.03)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                  >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      {specCardExpanded ? 'Collapse' : 'Expand'}
-                      <ChevronDown 
-                        size={14} 
-                        style={{ 
-                          transform: specCardExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                          transition: 'transform 0.3s ease' 
-                        }} 
-                      />
-                    </span>
-                  </button>
-                </div>
-
-                <div 
-                  style={{
-                    maxHeight: specCardExpanded ? '1000px' : '0px',
-                    opacity: specCardExpanded ? 1 : 0,
-                    overflow: 'hidden',
-                    transition: 'max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, margin-top 0.4s ease',
-                    marginTop: specCardExpanded ? '16px' : '0px'
+                    padding: '20px 24px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-glass)',
+                    boxShadow: 'var(--shadow-md)',
+                    transition: 'all 0.3s ease'
                   }}
                 >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <span style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-title)', margin: 0 }}>
+                      Job Target Specifications
+                    </span>
+                    {activeJobId && (
+                      <button
+                        onClick={() => setSpecCardExpanded(false)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.03)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+
                   <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '16px' }}>
                     {activeJobId ? (
                       /* Beautiful Read-only Layout when Job details are locked */
@@ -1083,7 +1119,7 @@ export const DashboardPage: React.FC = () => {
                     )}
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Collapsible/Toggleable CV Upload Dropzone */}
               <div className="glass-card" style={{ padding: '20px 24px', position: 'relative' }}>
@@ -1475,7 +1511,7 @@ export const DashboardPage: React.FC = () => {
                 ) : (
                   <>
                     <Sparkles size={13} />
-                    <span>Re-evaluate Resumes</span>
+                    <span>Re-evaluate</span>
                   </>
                 )}
               </button>
@@ -1587,69 +1623,169 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* 3. Floating progress notification toast popup (Google Drive/ChatGPT style) */}
-      {uploadProgress && uploadProgress.status === 'uploaded' && (
-        <div style={styles.floatingProgressCard} className="animate-scale-up">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-            <CheckCircle2 size={16} style={{ color: 'var(--accent-emerald)' }} />
-            <span style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--accent-emerald)' }}>
-              Files uploaded successfully!
-            </span>
+      {/* 3. Floating progress notification toast popup (Google Drive/ChatGPT style) */}
+      {uploadProgress && !dismissProgress && (
+        <div style={{ ...styles.floatingProgressCard, position: 'fixed' }} className="animate-scale-up">
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            {(() => {
+              const isFinished = uploadProgress.current === uploadProgress.total;
+              const isStarting = uploadProgress.current === 0;
+              const pct = uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0;
+              
+              let statusIcon = null;
+              let cardTitle = "";
+              let titleColor = "var(--text-title)";
+              
+              if (isFinished) {
+                statusIcon = <CheckCircle2 size={16} style={{ color: 'var(--accent-emerald)', flexShrink: 0 }} />;
+                cardTitle = "Evaluation Completed!";
+                titleColor = "var(--accent-emerald)";
+              } else {
+                statusIcon = <Clock size={16} className="animate-spin" style={{ color: 'var(--accent-indigo)', flexShrink: 0 }} />;
+                cardTitle = isStarting ? `Evaluating Candidates... (0%)` : `Evaluating Candidates... (${pct}%)`;
+                titleColor = "var(--accent-indigo)";
+              }
+              
+              return (
+                <>
+                  {statusIcon}
+                  <span style={{ fontSize: '0.88rem', fontWeight: '700', color: titleColor }}>
+                    {cardTitle}
+                  </span>
+                </>
+              );
+            })()}
           </div>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', lineHeight: '1.5' }}>
-            All {uploadProgress.total} file(s) received by the server. Processing has started in the background.
-          </p>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-sm)',
-            background: 'rgba(16, 185, 129, 0.08)',
-            border: '1px solid rgba(16, 185, 129, 0.2)',
-          }}>
-            <CheckCircle2 size={13} style={{ color: 'var(--accent-emerald)', flexShrink: 0 }} />
-            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-emerald)' }}>
-              Safe to close this tab — evaluation will continue on the server
-            </span>
-          </div>
-          <div style={{ ...styles.progressBarTrack, marginTop: '12px' }}>
-            <div style={{ ...styles.progressBarFill, width: '100%', background: 'var(--accent-emerald)' }} />
-          </div>
-        </div>
-      )}
 
-      {uploadProgress && (uploadProgress.status === 'completed' || uploadProgress.status === 'failed') && (
-        <div style={styles.floatingProgressCard} className="animate-scale-up">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Clock size={16} className="animate-spin" style={{ color: 'var(--accent-indigo)' }} />
-              <span style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--text-title)' }}>
-                {uploadProgress.status === 'completed' ? 'Processing Complete' : 'Processing Resumes...'}
-              </span>
-            </div>
-          </div>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            File {uploadProgress.current} of {uploadProgress.total}: {uploadProgress.fileName}
-          </p>
-          <div style={styles.progressBarTrack}>
-            <div
-              style={{
-                ...styles.progressBarFill,
-                width: `${(uploadProgress.current / uploadProgress.total) * 100}%`
-              }}
-            />
-          </div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            marginTop: '8px',
-          }}>
-            <CheckCircle2 size={11} style={{ color: 'var(--accent-emerald)', flexShrink: 0 }} />
-            <span style={{ fontSize: '0.68rem', fontWeight: '500', color: 'var(--text-muted)' }}>
-              Safe to close tab — processing continues on the server
-            </span>
-          </div>
+          {/* Body content */}
+          {(() => {
+            const isFinished = uploadProgress.current === uploadProgress.total;
+            const isStarting = uploadProgress.current === 0;
+            
+            if (isFinished) {
+              return (
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', lineHeight: '1.5' }}>
+                  Successfully processed all {uploadProgress.total} candidates.
+                </p>
+              );
+            } else if (isStarting) {
+              const stage = uploadProgress.currentStage || "Initializing background evaluation...";
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0, lineHeight: '1.4' }}>
+                    All {uploadProgress.total} file(s) received by the server.
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-muted)', flexShrink: 0 }}>
+                      Status:
+                    </span>
+                    <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-indigo)', lineHeight: '1.4' }}>
+                      {stage}
+                    </span>
+                  </div>
+                </div>
+              );
+            } else {
+              const stage = uploadProgress.currentStage || "Processing...";
+              const fileNum = Math.min(uploadProgress.current + 1, uploadProgress.total);
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                      File {fileNum} of {uploadProgress.total}:
+                    </span>
+                    <span style={{ 
+                      fontSize: '0.8rem', 
+                      fontWeight: '600', 
+                      color: 'var(--text-title)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      maxWidth: '220px'
+                    }} title={uploadProgress.fileName}>
+                      {uploadProgress.fileName}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-muted)', flexShrink: 0 }}>
+                      Status:
+                    </span>
+                    <span style={{ 
+                      fontSize: '0.75rem', 
+                      fontWeight: '600', 
+                      color: 'var(--accent-indigo)',
+                      lineHeight: '1.4',
+                      wordBreak: 'break-word'
+                    }}>
+                      {stage}
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+          })()}
+
+          {/* Progress bar */}
+          {(() => {
+            const isFinished = uploadProgress.current === uploadProgress.total;
+            const isStarting = uploadProgress.current === 0;
+            const pct = uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0;
+            return (
+              <div style={styles.progressBarTrack}>
+                <div
+                  style={{
+                    ...styles.progressBarFill,
+                    width: isStarting ? '12%' : `${pct}%`,
+                    background: isFinished ? 'var(--accent-emerald)' : 'var(--accent-indigo)',
+                    animation: isStarting ? 'progressPulse 1.5s ease-in-out infinite' : 'none'
+                  }}
+                />
+              </div>
+            );
+          })()}
+
+          {/* Bottom notice banner */}
+          {(() => {
+            const isFinished = uploadProgress.current === uploadProgress.total;
+            if (isFinished) {
+              return (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(16, 185, 129, 0.08)',
+                  border: '1px solid rgba(16, 185, 129, 0.2)',
+                  marginTop: '10px',
+                }}>
+                  <CheckCircle2 size={13} style={{ color: 'var(--accent-emerald)', flexShrink: 0 }} />
+                  <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-emerald)' }}>
+                    All candidate evaluations are updated
+                  </span>
+                </div>
+              );
+            } else {
+              return (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(99, 102, 241, 0.08)',
+                  border: '1px solid rgba(99, 102, 241, 0.2)',
+                  marginTop: '10px',
+                }}>
+                  <Clock size={13} style={{ color: 'var(--accent-indigo)', flexShrink: 0 }} />
+                  <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-indigo)' }}>
+                    Safe to close tab — processing continues on the server
+                  </span>
+                </div>
+              );
+            }
+          })()}
         </div>
       )}
 
@@ -2008,7 +2144,7 @@ export const DashboardPage: React.FC = () => {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '4px' }}>
                         {selectedCV.matchDetails.github_projects.map((proj: any) => (
                           <div
-                            key={proj.html_url}
+                            key={proj.html_url || proj.name}
                             style={{
                               padding: '16px',
                               borderRadius: 'var(--radius-md)',
@@ -2020,23 +2156,37 @@ export const DashboardPage: React.FC = () => {
                             }}
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
-                              <a
-                                href={proj.html_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
+                              {proj.html_url ? (
+                                <a
+                                  href={proj.html_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    fontSize: '1rem',
+                                    fontWeight: '600',
+                                    color: 'var(--accent-indigo)',
+                                    textDecoration: 'none',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                  }}
+                                >
+                                  <ExternalLink size={15} />
+                                  {proj.name}
+                                </a>
+                              ) : (
+                                <span style={{
                                   fontSize: '1rem',
                                   fontWeight: '600',
-                                  color: 'var(--accent-indigo)',
-                                  textDecoration: 'none',
-                                  display: 'flex',
+                                  color: 'var(--text-title)',
+                                  display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: '6px'
-                                }}
-                              >
-                                <ExternalLink size={15} />
-                                {proj.name}
-                              </a>
+                                }}>
+                                  <FileText size={15} color="var(--text-muted)" />
+                                  {proj.name}
+                                </span>
+                              )}
                               
                               {/* Match and Contributed Indicators */}
                               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -2080,15 +2230,17 @@ export const DashboardPage: React.FC = () => {
                             
                             {/* Repo Stats and Languages */}
                             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '16px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                              {/* Stats */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                  <Star size={12} /> {proj.stars}
-                                </span>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                  <GitFork size={12} /> {proj.forks}
-                                </span>
-                              </div>
+                              {/* Stats (only if GitHub repo is linked) */}
+                              {proj.html_url && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                    <Star size={12} /> {proj.stars}
+                                  </span>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                    <GitFork size={12} /> {proj.forks}
+                                  </span>
+                                </div>
+                              )}
                               
                               {/* Languages */}
                               {proj.languages && proj.languages.length > 0 && (
@@ -2302,6 +2454,144 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Custom Lifespan Extension Modal */}
+      {extensionModal.isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.4)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999
+        }} className="animate-fade-in" onClick={() => setExtensionModal({ isOpen: false, jobId: '', jobTitle: '', daysToExtend: 10 })}>
+          <div style={{
+            width: '90%',
+            maxWidth: '420px',
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--border-glass)',
+            borderRadius: 'var(--radius-md)',
+            padding: '24px',
+            boxShadow: 'var(--shadow-premium)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }} className="animate-scale-up" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--accent-indigo)'
+              }}>
+                <Clock size={18} />
+              </div>
+              <h3 style={{
+                margin: 0,
+                fontSize: '1.1rem',
+                fontWeight: '700',
+                color: 'var(--text-title)'
+              }}>
+                Extend Job Lifespan
+              </h3>
+            </div>
+            
+            <p style={{
+              margin: 0,
+              fontSize: '0.88rem',
+              color: 'var(--text-body)',
+              lineHeight: '1.5'
+            }}>
+              Extend the expiration date of <strong>{extensionModal.jobTitle}</strong>. Resumes associated with this job will not be deleted until the new expiration period ends.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+                Days to Extend:
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="number"
+                  min="1"
+                  max="90"
+                  value={extensionModal.daysToExtend}
+                  onChange={(e) => setExtensionModal(prev => ({ ...prev, daysToExtend: Math.max(1, parseInt(e.target.value) || 1) }))}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-glass)',
+                    backgroundColor: 'var(--bg-main)',
+                    color: 'var(--text-title)',
+                    fontSize: '0.9rem',
+                    outline: 'none',
+                    transition: 'border-color 0.2s',
+                  }}
+                />
+                <span style={{ fontSize: '0.88rem', color: 'var(--text-body)' }}>days</span>
+              </div>
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              marginTop: '8px'
+            }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setExtensionModal({ isOpen: false, jobId: '', jobTitle: '', daysToExtend: 10 })}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await extendJobLifespan(extensionModal.jobId, extensionModal.daysToExtend);
+                    showToast(`Job lifespan successfully extended by ${extensionModal.daysToExtend} days!`, 'success');
+                  } catch (err: any) {
+                    showToast(err.message || 'Failed to extend job lifespan', 'error');
+                  } finally {
+                    setExtensionModal({ isOpen: false, jobId: '', jobTitle: '', daysToExtend: 10 });
+                  }
+                }}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  borderRadius: 'var(--radius-md)',
+                  border: 'none',
+                  backgroundColor: 'var(--accent-indigo)',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  transition: 'var(--transition-fast)',
+                  boxShadow: '0 2px 4px rgba(99, 102, 241, 0.2)'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.filter = 'brightness(0.95)'}
+                onMouseLeave={(e) => e.currentTarget.style.filter = 'none'}
+              >
+                Confirm Extension
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -2392,7 +2682,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sidebarHistoryItem: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: '10px',
     padding: '10px 12px',
     borderRadius: 'var(--radius-md)',
@@ -2541,11 +2831,12 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '14px 32px',
+    padding: '10px 32px',
     borderBottom: '1px solid var(--border-glass)',
     backgroundColor: 'var(--bg-surface-glass)',
     backdropFilter: 'blur(8px)',
-    height: '56px',
+    minHeight: '56px',
+    height: 'auto',
     flexShrink: 0,
   },
   mainHeaderJobInfo: {

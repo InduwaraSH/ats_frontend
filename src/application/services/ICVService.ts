@@ -15,6 +15,8 @@ export interface UploadProgress {
   matchScore?: number;
   urls?: string[];
   matchDetails?: any;
+  currentStage?: string;
+  batchId?: string;
 }
 
 /**
@@ -34,6 +36,15 @@ export interface ICVService {
     files: File[],
     jobId: string,
     jobTitle: string,
+    onProgress?: (progress: UploadProgress) => void,
+  ): Promise<{ totalSuccess: number; totalFailed: number }>;
+
+  /**
+   * Polls the status of an existing batch upload by its ID.
+   */
+  pollBatchStatus(
+    batchId: string,
+    totalFiles: number,
     onProgress?: (progress: UploadProgress) => void,
   ): Promise<{ totalSuccess: number; totalFailed: number }>;
 

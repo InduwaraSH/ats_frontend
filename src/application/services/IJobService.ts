@@ -23,4 +23,9 @@ export interface IJobService {
    * Deletes a specific job.
    */
   deleteJob(jobId: string): Promise<void>;
+
+  /**
+   * Extends the lifespan of a specific job by a number of days.
+   */
+  extendJob(jobId: string, days: number): Promise<Job>;
 }

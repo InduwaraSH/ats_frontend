@@ -130,5 +130,38 @@ export class JobService implements IJobService {
       throw new Error(errorMessage);
     }
   }
+
+  async extendJob(jobId: string, days: number): Promise<Job> {
+    const response = await fetch(`${this.API_BASE_URL}/job/${encodeURIComponent(jobId)}/extend?days=${days}`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      let errorMessage = `Failed to extend job with ID ${jobId}`;
+      try {
+        const errData = await response.json();
+        if (errData?.detail) {
+          errorMessage = typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail);
+        }
+      } catch {
+        // use default
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    return {
+      id: data.id,
+      jobId: data.job_id,
+      title: data.title,
+      description: data.description,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      createdWay: data.created_way,
+      daysRemaining: data.days_remaining,
+      expiresAt: data.expires_at,
+    };
+  }
 }
 export const jobServiceInstance = new JobService();

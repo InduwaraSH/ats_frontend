@@ -101,6 +101,23 @@ const getLinkedinUrl = (urls: string[], name: string): string | undefined => {
   return bestUrl;
 };
 
+const parseDateSafely = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  
+  if (
+    typeof dateStr === 'string' &&
+    !dateStr.includes('Z') &&
+    !dateStr.includes('+') &&
+    !/-\d{2}:\d{2}$/.test(dateStr) &&
+    !/-\d{4}$/.test(dateStr)
+  ) {
+    if (dateStr.includes('T') || (dateStr.includes('-') && dateStr.includes(':'))) {
+      return new Date(dateStr + 'Z');
+    }
+  }
+  return new Date(dateStr);
+};
+
 const CVContext = createContext<CVContextType | undefined>(undefined);
 
 // Instantiate our real services
@@ -175,7 +192,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           applicantName: app.candidate_name || 'Unknown',
           status: app.status === 'completed' ? 'completed' : (app.status === 'pending' || app.status === 'processing') ? 'processing' as any : 'failed',
           matchScore: Number(app.match_score || 0),
-          uploadedAt: new Date(app.created_at).toLocaleDateString('en-US', {
+          uploadedAt: parseDateSafely(app.created_at).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
@@ -226,8 +243,8 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     try {
       const jobs = await jobService.listJobs();
       const sorted = jobs.sort((a, b) => {
-        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        const dateA = a.updatedAt ? parseDateSafely(a.updatedAt).getTime() : (a.createdAt ? parseDateSafely(a.createdAt).getTime() : 0);
+        const dateB = b.updatedAt ? parseDateSafely(b.updatedAt).getTime() : (b.createdAt ? parseDateSafely(b.createdAt).getTime() : 0);
         return dateB - dateA;
       });
       setJobsList(sorted);

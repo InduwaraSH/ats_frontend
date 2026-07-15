@@ -101,6 +101,20 @@ const getLinkedinUrl = (urls: string[], name: string): string | undefined => {
   return bestUrl;
 };
 
+const getPortfolioUrl = (urls: string[]): string | undefined => {
+  if (!urls) return undefined;
+  return urls.find((u: string) => {
+    const lower = u.toLowerCase();
+    // Exclude social and common hosting platforms
+    return !lower.includes('github.com') && 
+           !lower.includes('linkedin.com') && 
+           !lower.includes('gitlab.com') && 
+           !lower.includes('bitbucket.org') &&
+           !lower.includes('stackoverflow.com') &&
+           !lower.includes('gmail.com');
+  });
+};
+
 const parseDateSafely = (dateStr: string): Date => {
   if (!dateStr) return new Date();
   
@@ -204,6 +218,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           urls: app.urls || [],
           githubUrl: (app.urls || []).find((u: string) => u.toLowerCase().includes('github.com')) || undefined,
           linkedinUrl: getLinkedinUrl(app.urls || [], app.candidate_name || ''),
+          portfolioUrl: getPortfolioUrl(app.urls || []),
           matchDetails: app.match_details ? {
             id: app.match_details.id || app.match_details._id || app.id || app._id,
             cvId: app.match_details.cvId || app.id || app._id,
@@ -316,7 +331,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setUploadProgress(null);
   };
 
-  const selectJob = (job: Job) => {
+  const selectJob = async (job: Job) => {
     setJobId(job.jobId);
     setJobTitle(job.title);
     setJobDescriptionState(job.description);
@@ -325,12 +340,33 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       clearTimeout(autoCloseTimeoutRef.current);
       autoCloseTimeoutRef.current = null;
     }
-    localStorage.removeItem('active_cv_batch_id');
-    localStorage.removeItem('active_cv_batch_total');
-    localStorage.removeItem('active_cv_batch_job_id');
-    localStorage.removeItem('active_cv_batch_job_title');
-    localStorage.removeItem('active_cv_batch_job_desc');
     setUploadProgress(null);
+
+    try {
+      const activeBatch = await cvService.checkActiveBatch(job.jobId);
+      if (activeBatch && activeBatch.active && activeBatch.batchId && activeBatch.totalFiles) {
+        localStorage.setItem('active_cv_batch_id', activeBatch.batchId);
+        localStorage.setItem('active_cv_batch_total', activeBatch.totalFiles.toString());
+        localStorage.setItem('active_cv_batch_job_id', job.jobId);
+        localStorage.setItem('active_cv_batch_job_title', job.title);
+        localStorage.setItem('active_cv_batch_job_desc', job.description);
+
+        resumeBatchMonitoring(activeBatch.batchId, activeBatch.totalFiles, job.jobId, job.title);
+      } else {
+        localStorage.removeItem('active_cv_batch_id');
+        localStorage.removeItem('active_cv_batch_total');
+        localStorage.removeItem('active_cv_batch_job_id');
+        localStorage.removeItem('active_cv_batch_job_title');
+        localStorage.removeItem('active_cv_batch_job_desc');
+      }
+    } catch (err) {
+      console.warn('Failed to check active batch on selectJob:', err);
+      localStorage.removeItem('active_cv_batch_id');
+      localStorage.removeItem('active_cv_batch_total');
+      localStorage.removeItem('active_cv_batch_job_id');
+      localStorage.removeItem('active_cv_batch_job_title');
+      localStorage.removeItem('active_cv_batch_job_desc');
+    }
   };
 
   const deleteJob = async (idToDelete: string) => {
@@ -402,6 +438,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             urls: progress.urls || [],
             githubUrl: (progress.urls || []).find((u: string) => u.toLowerCase().includes('github.com')) || undefined,
             linkedinUrl: getLinkedinUrl(progress.urls || [], progress.candidateName || progress.fileName.replace(/\.[^/.]+$/, '')),
+            portfolioUrl: getPortfolioUrl(progress.urls || []),
             matchDetails: progress.matchDetails ? {
               id: progress.matchDetails.id || progress.matchDetails._id || progress.applicationId || '',
               cvId: progress.matchDetails.cvId || progress.applicationId || '',
@@ -485,6 +522,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             urls: progress.urls || [],
             githubUrl: (progress.urls || []).find((u: string) => u.toLowerCase().includes('github.com')) || undefined,
             linkedinUrl: getLinkedinUrl(progress.urls || [], progress.candidateName || progress.fileName.replace(/\.[^/.]+$/, '')),
+            portfolioUrl: getPortfolioUrl(progress.urls || []),
             matchDetails: progress.matchDetails ? {
               id: progress.matchDetails.id || progress.matchDetails._id || progress.applicationId || '',
               cvId: progress.matchDetails.cvId || progress.applicationId || '',

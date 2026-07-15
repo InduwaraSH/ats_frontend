@@ -59,5 +59,10 @@ export interface ICVService {
    * @param cvId Unique identifier of the CV
    */
   deleteCV(cvId: string): Promise<void>;
+
+  /**
+   * Checks if there is an active batch processing job for a specific job.
+   */
+  checkActiveBatch(jobId: string): Promise<{ active: boolean; batchId?: string; totalFiles?: number } | null>;
 }
 

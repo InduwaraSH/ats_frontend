@@ -17,4 +17,5 @@ export interface CV {
   urls?: string[];
   githubUrl?: string;
   linkedinUrl?: string;
+  portfolioUrl?: string;
 }

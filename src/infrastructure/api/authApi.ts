@@ -36,7 +36,26 @@ export interface UserResponse {
   is_active: boolean;
 }
 
-// ─── Shared error handler ─────────────────────────────────────────────────────
+// ─── Shared error handler & Timeout helper ────────────────────────────────────
+
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error: any) {
+    clearTimeout(id);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Please check if the backend server is running.');
+    }
+    throw error;
+  }
+}
 
 async function parseResponse<T>(res: Response): Promise<T> {
   if (res.ok) return res.json() as Promise<T>;
@@ -55,7 +74,7 @@ async function parseResponse<T>(res: Response): Promise<T> {
 
 /** POST /login — backend sets an HttpOnly cookie on success. */
 export async function apiLogin(payload: LoginPayload): Promise<LoginResponse> {
-  const res = await fetch(`${BASE}/login`, {
+  const res = await fetchWithTimeout(`${BASE}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -66,7 +85,7 @@ export async function apiLogin(payload: LoginPayload): Promise<LoginResponse> {
 
 /** POST /signup — creates the account. */
 export async function apiSignup(payload: SignupPayload): Promise<UserResponse> {
-  const res = await fetch(`${BASE}/signup`, {
+  const res = await fetchWithTimeout(`${BASE}/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -77,7 +96,7 @@ export async function apiSignup(payload: SignupPayload): Promise<UserResponse> {
 
 /** GET /me — backend reads the cookie; no Authorization header needed. */
 export async function apiGetMe(): Promise<UserResponse> {
-  const res = await fetch(`${BASE}/me`, {
+  const res = await fetchWithTimeout(`${BASE}/me`, {
     credentials: 'include',
   });
   return parseResponse<UserResponse>(res);
@@ -85,7 +104,7 @@ export async function apiGetMe(): Promise<UserResponse> {
 
 /** POST /logout — backend clears the HttpOnly cookie server-side. */
 export async function apiLogout(): Promise<void> {
-  const res = await fetch(`${BASE}/logout`, {
+  const res = await fetchWithTimeout(`${BASE}/logout`, {
     method: 'POST',
     credentials: 'include',
   });

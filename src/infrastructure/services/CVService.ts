@@ -184,4 +184,23 @@ export class CVService implements ICVService {
       throw new Error(errorMessage);
     }
   }
+
+  async checkActiveBatch(jobId: string): Promise<{ active: boolean; batchId?: string; totalFiles?: number } | null> {
+    const response = await fetch(`${this.API_BASE_URL}/candidates/upload/active-batch/${jobId}`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    if (data.active) {
+      return {
+        active: true,
+        batchId: data.batch_id,
+        totalFiles: data.total_files,
+      };
+    }
+    return { active: false };
+  }
 }

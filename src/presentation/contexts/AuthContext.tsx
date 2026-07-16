@@ -9,7 +9,6 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
-  signup: (fullName: string, email: string, password: string, role: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -55,20 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signup = async (fullName: string, email: string, password: string, role: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const newUser = await authService.signup(fullName, email, password, role);
-      setUser(newUser);
-      showToast(`Account created! Welcome, ${newUser.name}!`, 'success');
-    } catch (err: any) {
-      setError(err.message || 'Registration failed');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const logout = async () => {
     setLoading(true);
@@ -87,7 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearError = () => setError(null);
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, signup, logout, clearError }}>
+    <AuthContext.Provider value={{ user, loading, error, login, logout, clearError }}>
       {children}
     </AuthContext.Provider>
   );

@@ -17,13 +17,6 @@ export interface LoginPayload {
   password: string;
 }
 
-export interface SignupPayload {
-  full_name: string;
-  email: string;
-  password: string;
-  role: string;
-}
-
 export interface LoginResponse {
   message: string;
 }
@@ -83,16 +76,7 @@ export async function apiLogin(payload: LoginPayload): Promise<LoginResponse> {
   return parseResponse<LoginResponse>(res);
 }
 
-/** POST /signup — creates the account. */
-export async function apiSignup(payload: SignupPayload): Promise<UserResponse> {
-  const res = await fetchWithTimeout(`${BASE}/signup`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    credentials: 'include',
-  });
-  return parseResponse<UserResponse>(res);
-}
+
 
 /** GET /me — backend reads the cookie; no Authorization header needed. */
 export async function apiGetMe(): Promise<UserResponse> {

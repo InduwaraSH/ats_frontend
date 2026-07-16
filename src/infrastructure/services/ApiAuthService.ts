@@ -1,6 +1,6 @@
 import type { IAuthService } from '../../application/services/IAuthService';
 import type { User } from '../../domain/entities/User';
-import { apiLogin, apiGetMe, apiSignup, apiLogout } from '../api/authApi';
+import { apiLogin, apiGetMe, apiLogout } from '../api/authApi';
 
 /**
  * Real implementation of IAuthService that communicates with the FastAPI backend.
@@ -13,16 +13,7 @@ export class ApiAuthService implements IAuthService {
     return this._fetchCurrentUser();
   }
 
-  async signup(
-    fullName: string,
-    email: string,
-    password: string,
-    role: string,
-  ): Promise<User> {
-    await apiSignup({ full_name: fullName, email, password, role });
-    // Auto-login immediately after successful registration
-    return this.login(email, password);
-  }
+
 
   async logout(): Promise<void> {
     await apiLogout(); // backend clears the HttpOnly cookie

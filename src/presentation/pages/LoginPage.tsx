@@ -5,7 +5,11 @@ import { KeyRound, Mail, AlertTriangle, Loader2 } from 'lucide-react';
 // TODO: Remove this flag (and the credentials banner) before production release.
 const DEV_MODE = true;
 
-export const LoginPage: React.FC = () => {
+interface LoginPageProps {
+  onNavigateToSignup: () => void;
+}
+
+export const LoginPage: React.FC<LoginPageProps> = ({ onNavigateToSignup }) => {
   const { login, error, clearError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -118,7 +122,18 @@ export const LoginPage: React.FC = () => {
           </button>
         </form>
 
-
+        {/* Navigate to Signup */}
+        <div style={styles.footer}>
+          <span style={styles.footerText}>Don't have an account?</span>
+          <button
+            type="button"
+            onClick={onNavigateToSignup}
+            disabled={isSubmitting}
+            style={styles.linkButton}
+          >
+            Sign Up
+          </button>
+        </div>
 
         {/* DEV-ONLY: remove before going to production */}
         {DEV_MODE && (

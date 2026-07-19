@@ -25,7 +25,8 @@ import {
   Download,
   Plus,
   ChevronDown,
-  Search
+  Search,
+  Calendar
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -49,8 +50,11 @@ export const DashboardPage: React.FC = () => {
     deleteJob,
     startNewJob,
     selectJob,
-    loadEvaluatedCVs,
     extendJobLifespan,
+    isReEvaluating,
+    reEvaluateCVs,
+    loadEvaluatedCVs,
+    setUploadProgress,
   } = useCV();
 
   const [extensionModal, setExtensionModal] = useState<{
@@ -75,7 +79,7 @@ export const DashboardPage: React.FC = () => {
   const [dragActive, setDragActive] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSummary, setUploadSummary] = useState<{ total: number; success: number; failed: number } | null>(null);
-  const [dismissProgress, setDismissProgress] = useState(false);
+
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [bulkMinScore, setBulkMinScore] = useState<number>(67);
   const [bulkMaxScore, setBulkMaxScore] = useState<number>(100);
@@ -100,12 +104,7 @@ export const DashboardPage: React.FC = () => {
     name: ''
   });
   const [similarityThreshold, setSimilarityThreshold] = useState(50);
-  const [isReEvaluating, setIsReEvaluating] = useState(false);
-  const [reEvalProgress, setReEvalProgress] = useState<{
-    current: number;
-    total: number;
-    name: string;
-  } | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Synchronize local states when fetched from the backend on load
@@ -129,11 +128,7 @@ export const DashboardPage: React.FC = () => {
     setUploadId(jobId);
   }, [jobId]);
 
-  useEffect(() => {
-    if (uploadProgress) {
-      setDismissProgress(false);
-    }
-  }, [uploadProgress]);
+
 
   const handleSaveJob = async () => {
     if (!idText.trim() || !titleText.trim() || !jdText.trim()) {
@@ -420,76 +415,10 @@ export const DashboardPage: React.FC = () => {
       showToast("Please select or save a job first.", "error");
       return;
     }
-    setIsReEvaluating(true);
-    setReEvalProgress({ current: 0, total: 0, name: 'Initializing...' });
-    
-    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
-      const url = `http://localhost:8000/api/v1/applications/re-evaluate/stream?job_id=${encodeURIComponent(targetJobId)}&threshold=${similarityThreshold}`;
-      const response = await fetch(url, {
-        method: 'POST',
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to initiate re-evaluation stream.');
-      }
-
-      reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Response body is not readable.');
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data: ')) continue;
-
-          try {
-            const data = JSON.parse(trimmed.slice(6));
-            if (data.type === 'init') {
-              setReEvalProgress({ current: 0, total: data.total, name: 'Starting evaluations...' });
-            } else if (data.type === 'progress') {
-              setReEvalProgress({
-                current: data.current,
-                total: data.total,
-                name: data.name
-              });
-            } else if (data.type === 'completed') {
-              showToast(`Successfully re-evaluated all ${data.total_processed} applications!`, 'success');
-            } else if (data.type === 'error') {
-              showToast(data.detail || 'Error during re-evaluation.', 'error');
-            }
-          } catch {
-            // Ignore parse errors
-          }
-        }
-      }
-
-      // Finally reload CV list to refresh state in context
-      await loadEvaluatedCVs(targetJobId);
+      await reEvaluateCVs(targetJobId, similarityThreshold);
     } catch (e: any) {
-      showToast(e.message || 'Error occurred during streaming.', 'error');
-    } finally {
-      setIsReEvaluating(false);
-      setReEvalProgress(null);
-      if (reader) {
-        try {
-          reader.releaseLock();
-        } catch {
-          // ignore
-        }
-      }
+      showToast(e.message || "Failed to run re-evaluation.", "error");
     }
   };
 
@@ -740,88 +669,154 @@ export const DashboardPage: React.FC = () => {
         {/* Header Bar */}
         <header style={styles.mainHeader}>
           {activeJobId ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', flex: 1 }}>
-              <div style={styles.mainHeaderJobInfo}>
-                <Briefcase size={16} color="var(--accent-indigo)" />
-                <span style={styles.mainHeaderJobTitle}>{jobTitle}</span>
-                <span style={styles.mainHeaderJobId}>({activeJobId})</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '20px', flexWrap: 'wrap' }}>
+              
+              {/* Left Side: Job Info */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--accent-indigo-glow)',
+                  border: '1px solid rgba(99, 102, 241, 0.15)',
+                  color: 'var(--accent-indigo)'
+                }}>
+                  <Briefcase size={16} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <h3 style={{
+                    fontSize: '0.95rem',
+                    fontWeight: '700',
+                    color: 'var(--text-title)',
+                    margin: 0,
+                    lineHeight: '1.2'
+                  }}>
+                    {jobTitle}
+                  </h3>
+                  <span style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--text-muted)',
+                    fontWeight: '600'
+                  }}>
+                    Job ID: {activeJobId}
+                  </span>
+                </div>
               </div>
 
-              {activeJob?.daysRemaining !== undefined && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '6px' }}>
-                  <span style={{ 
-                    fontSize: '0.75rem', 
-                    color: activeJob.daysRemaining <= 5 ? '#f87171' : 'var(--text-muted)', 
-                    backgroundColor: 'rgba(255, 255, 255, 0.03)', 
-                    padding: '2px 8px', 
-                    borderRadius: '4px', 
-                    fontWeight: '600',
-                    border: activeJob.daysRemaining <= 5 ? '1px solid rgba(248, 113, 113, 0.2)' : '1px solid var(--border-glass)'
+              {/* Right Side: Quick Stats and Actions */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                {/* 1. Time capsule with integrated mini Extend button */}
+                {activeJob?.daysRemaining !== undefined && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    backgroundColor: activeJob.daysRemaining <= 5 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(15, 23, 42, 0.03)',
+                    border: activeJob.daysRemaining <= 5 ? '1px solid rgba(239, 68, 68, 0.2)' : '1px solid var(--border-glass)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '4px 6px 4px 10px',
+                    gap: '10px',
+                    height: '32px',
                   }}>
-                    {activeJob.daysRemaining}d left
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExtensionModal({
-                        isOpen: true,
-                        jobId: activeJob.jobId,
-                        jobTitle: activeJob.title,
-                        daysToExtend: 10
-                      });
-                    }}
-                    style={{
-                      fontSize: '0.68rem',
-                      color: 'var(--accent-indigo)',
-                      backgroundColor: 'rgba(99, 102, 241, 0.08)',
-                      border: '1px solid rgba(99, 102, 241, 0.15)',
-                      padding: '1px 6px',
-                      borderRadius: '4px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.15)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.08)'}
-                  >
-                    Extend
-                  </button>
-                </div>
-              )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Calendar size={13} style={{ color: activeJob.daysRemaining <= 5 ? 'var(--accent-rose)' : 'var(--text-muted)' }} />
+                      <span style={{
+                        fontSize: '0.8rem',
+                        fontWeight: '600',
+                        color: activeJob.daysRemaining <= 5 ? 'var(--accent-rose)' : 'var(--text-body)',
+                      }}>
+                        {activeJob.daysRemaining} days left
+                      </span>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExtensionModal({
+                          isOpen: true,
+                          jobId: activeJob.jobId,
+                          jobTitle: activeJob.title,
+                          daysToExtend: 10
+                        });
+                      }}
+                      className="btn-primary"
+                      style={{
+                        padding: '3px 10px',
+                        fontSize: '0.72rem',
+                        borderRadius: '6px',
+                        boxShadow: 'none',
+                        height: '24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      Extend
+                    </button>
+                  </div>
+                )}
 
-              {jobCVs.length > 0 && (
-                <>
-                  <span style={{ 
-                    fontSize: '0.75rem', 
-                    color: 'var(--accent-emerald)', 
-                    backgroundColor: 'rgba(16, 185, 129, 0.08)', 
-                    padding: '2px 8px', 
-                    borderRadius: '4px', 
-                    fontWeight: '600', 
-                    border: '1px solid rgba(16, 185, 129, 0.15)' 
+                {/* 2. Evaluated Candidates Badge */}
+                {jobCVs.length > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    backgroundColor: 'rgba(16, 185, 129, 0.06)',
+                    border: '1px solid rgba(16, 185, 129, 0.15)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '6px 12px',
+                    gap: '6px',
+                    height: '32px',
+                    fontSize: '0.8rem',
+                    fontWeight: '600',
+                    color: 'var(--accent-emerald)',
                   }}>
-                    {jobCVs.length} Evaluated
-                  </span>
-                  
+                    <CheckCircle2 size={13} color="var(--accent-emerald)" />
+                    <span>{jobCVs.length} Evaluated</span>
+                  </div>
+                )}
+
+                {/* 3. Candidate Review Stats Badge */}
+                {(activeJobId && jobCVs.length > 0) && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    border: '1px solid var(--border-glass)',
+                    borderRadius: 'var(--radius-sm)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+                    padding: '4px 10px',
+                    height: '32px',
+                    gap: '8px',
+                    fontSize: '0.78rem',
+                    color: 'var(--text-muted)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--accent-emerald)' }} />
+                      <span><strong style={{ color: 'var(--accent-emerald)' }}>{above50.length}</strong> selected</span>
+                    </div>
+                    <span style={{ color: 'var(--border-glass)' }}>|</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--accent-rose)' }} />
+                      <span><strong style={{ color: 'var(--accent-rose)' }}>{below50.length}</strong> review</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Specs Details Dropdown Toggle */}
+                {jobCVs.length > 0 && (
                   <button
                     onClick={() => setSpecCardExpanded(!specCardExpanded)}
+                    className="btn-secondary"
                     style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--accent-indigo)',
-                      fontSize: '0.75rem',
-                      fontWeight: '600',
-                      cursor: 'pointer',
+                      padding: '6px 12px',
+                      fontSize: '0.8rem',
+                      height: '32px',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px',
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      transition: 'background-color 0.2s',
-                      marginLeft: '12px'
+                      gap: '6px',
+                      borderRadius: 'var(--radius-sm)',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.03)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
                     <span>{specCardExpanded ? 'Hide Specs' : 'Show Specs'}</span>
                     <ChevronDown 
@@ -832,26 +827,13 @@ export const DashboardPage: React.FC = () => {
                       }} 
                     />
                   </button>
-                </>
-              )}
+                )}
+              </div>
             </div>
           ) : (
             <div style={styles.mainHeaderJobInfo}>
               <Sparkles size={16} color="var(--accent-indigo)" />
               <span style={styles.mainHeaderJobTitle}>New Assessment Setup</span>
-            </div>
-          )}
-
-          {/* Header Action: Stats display only */}
-          {(activeJobId && jobCVs.length > 0) && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--accent-emerald)', display: 'inline-block' }} />
-                <span><strong style={{ color: 'var(--accent-emerald)' }}>{above50.length}</strong> selected</span>
-                <span style={{ color: 'var(--border-glass-hover)' }}>|</span>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--accent-rose)', display: 'inline-block' }} />
-                <span><strong style={{ color: 'var(--accent-rose)' }}>{below50.length}</strong> review</span>
-              </div>
             </div>
           )}
         </header>
@@ -1433,8 +1415,7 @@ export const DashboardPage: React.FC = () => {
 
         {/* Right-side Score Range Panel (only when CVs exist) */}
         {(activeJobId && jobCVs.length > 0) && (
-          <div style={{
-            width: '220px',
+          <div className="right-sidebar" style={{
             flexShrink: 0,
             borderLeft: '1px solid var(--border-glass)',
             backgroundColor: 'var(--bg-surface-glass)',
@@ -1515,27 +1496,6 @@ export const DashboardPage: React.FC = () => {
                   </>
                 )}
               </button>
-              {reEvalProgress && reEvalProgress.total > 0 && (
-                <div className="animate-fade-in" style={{ marginTop: '4px', padding: '10px 12px', backgroundColor: 'rgba(99, 102, 241, 0.03)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-glass)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '5px' }}>
-                    <span>Re-evaluating: {reEvalProgress.current}/{reEvalProgress.total}</span>
-                    <span style={{ fontWeight: '700', color: 'var(--accent-indigo)' }}>
-                      {Math.round((reEvalProgress.current / reEvalProgress.total) * 100)}%
-                    </span>
-                  </div>
-                  <div style={{ width: '100%', height: '4px', backgroundColor: 'rgba(0, 0, 0, 0.05)', borderRadius: '2px', overflow: 'hidden', marginBottom: '6px' }}>
-                    <div style={{ width: `${(reEvalProgress.current / reEvalProgress.total) * 100}%`, height: '100%', backgroundColor: 'var(--accent-indigo)', borderRadius: '2px', transition: 'width 0.3s ease' }}></div>
-                  </div>
-                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                    Candidate: <strong style={{ color: 'var(--text-title)' }}>{reEvalProgress.name}</strong>
-                  </div>
-                </div>
-              )}
-              {reEvalProgress && reEvalProgress.total === 0 && (
-                <div className="animate-fade-in" style={{ marginTop: '4px', padding: '8px 10px', backgroundColor: 'rgba(0, 0, 0, 0.02)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-glass)', fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                  {reEvalProgress.name}
-                </div>
-              )}
             </div>
 
             {/* 2. Candidate Export (ZIP score filter) */}
@@ -1624,183 +1584,260 @@ export const DashboardPage: React.FC = () => {
 
       {/* 3. Floating progress notification toast popup (Google Drive/ChatGPT style) */}
       {/* 3. Floating progress notification toast popup (Google Drive/ChatGPT style) */}
-      {uploadProgress && !dismissProgress && (
-        <div style={{ ...styles.floatingProgressCard, position: 'fixed' }} className="animate-scale-up">
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+      {/* 3. Centered, blocking progress overlay modal for evaluations and re-evaluations */}
+      {uploadProgress && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.4)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }} className="animate-fade-in">
+          
+          <div style={{
+            width: '450px',
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--border-glass)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-premium)',
+            padding: '36px 32px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            position: 'relative'
+          }} className="animate-scale-up">
+            
             {(() => {
-              const isFinished = uploadProgress.current === uploadProgress.total;
+              const isFinished = uploadProgress.current === uploadProgress.total && uploadProgress.total > 0;
               const isStarting = uploadProgress.current === 0;
               const pct = uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0;
-              
-              let statusIcon = null;
-              let cardTitle = "";
-              let titleColor = "var(--text-title)";
-              
-              if (isFinished) {
-                statusIcon = <CheckCircle2 size={16} style={{ color: 'var(--accent-emerald)', flexShrink: 0 }} />;
-                cardTitle = "Evaluation Completed!";
-                titleColor = "var(--accent-emerald)";
-              } else {
-                statusIcon = <Clock size={16} className="animate-spin" style={{ color: 'var(--accent-indigo)', flexShrink: 0 }} />;
-                cardTitle = isStarting ? `Evaluating Candidates... (0%)` : `Evaluating Candidates... (${pct}%)`;
-                titleColor = "var(--accent-indigo)";
-              }
+              const isReeval = uploadProgress.currentStage?.toLowerCase().includes('re-evaluat') || 
+                               localStorage.getItem('active_reeval_job_id') !== null;
               
               return (
                 <>
-                  {statusIcon}
-                  <span style={{ fontSize: '0.88rem', fontWeight: '700', color: titleColor }}>
-                    {cardTitle}
-                  </span>
+                  {/* Status Icon */}
+                  <div style={{
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '50%',
+                    backgroundColor: isFinished ? 'rgba(16, 185, 129, 0.08)' : 'rgba(99, 102, 241, 0.08)',
+                    border: isFinished ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(99, 102, 241, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: '20px',
+                    color: isFinished ? 'var(--accent-emerald)' : 'var(--accent-indigo)'
+                  }}>
+                    {isFinished ? (
+                      <CheckCircle2 size={32} />
+                    ) : (
+                      <Clock size={32} className="animate-spin" />
+                    )}
+                  </div>
+
+                  {/* Header Title */}
+                  <h3 style={{
+                    fontSize: '1.25rem',
+                    fontWeight: '800',
+                    color: 'var(--text-title)',
+                    margin: '0 0 8px 0',
+                    lineHeight: '1.2'
+                  }}>
+                    {isFinished 
+                      ? 'Evaluation Completed!' 
+                      : isReeval 
+                        ? 'Re-aligning Candidate Profiles...' 
+                        : 'Evaluating Candidate Profiles...'}
+                  </h3>
+
+                  {/* Subtext */}
+                  <p style={{
+                    fontSize: '0.85rem',
+                    color: 'var(--text-muted)',
+                    margin: '0 0 24px 0',
+                    lineHeight: '1.5',
+                    maxWidth: '340px'
+                  }}>
+                    {isFinished 
+                      ? `Successfully processed and scored all ${uploadProgress.total} candidates against the job specifications.`
+                      : isStarting
+                        ? 'Establishing secure pipeline and extracting raw document contents...'
+                        : `Processing file ${Math.min(uploadProgress.current + 1, uploadProgress.total)} of ${uploadProgress.total}`}
+                  </p>
+
+                  {/* Current stage indicator */}
+                  {!isFinished && (
+                    <div style={{
+                      backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                      border: '1px solid var(--border-glass)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '12px 16px',
+                      width: '100%',
+                      textAlign: 'left',
+                      marginBottom: '24px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                        <span>Stage Status</span>
+                        <span>{pct}%</span>
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.82rem', 
+                        fontWeight: '600', 
+                        color: 'var(--text-title)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }} title={uploadProgress.fileName || uploadProgress.currentStage}>
+                        {uploadProgress.fileName ? `Analyzing: ${uploadProgress.fileName}` : uploadProgress.currentStage || 'Processing...'}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--accent-indigo)', marginTop: '2px', fontWeight: '500' }}>
+                        {uploadProgress.fileName ? (uploadProgress.currentStage || 'Running matching AI models...') : ''}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Progress Bar */}
+                  {!isFinished && (
+                    <div style={{ width: '100%', marginBottom: '24px' }}>
+                      <div style={{ ...styles.progressBarTrack, height: '8px', marginTop: 0 }}>
+                        <div
+                          style={{
+                            ...styles.progressBarFill,
+                            width: isStarting ? '12%' : `${pct}%`,
+                            background: 'var(--accent-indigo)',
+                            animation: isStarting ? 'progressPulse 1.5s ease-in-out infinite' : 'none'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Banner / Close Action */}
+                  {isFinished ? (
+                    <button
+                      onClick={async () => {
+                        // Reload evaluated CVs to pull full match_details/github_projects from DB
+                        await loadEvaluatedCVs(jobId || activeJobId);
+                        // Clean states
+                        setUploadProgress(null);
+                      }}
+                      className="btn-primary"
+                      style={{
+                        padding: '10px 24px',
+                        fontSize: '0.85rem',
+                        fontWeight: '700',
+                        borderRadius: '8px',
+                        width: '100%',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Close & View Results
+                    </button>
+                  ) : (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 16px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(99, 102, 241, 0.08)',
+                      border: '1px solid rgba(99, 102, 241, 0.15)',
+                      width: '100%',
+                      justifyContent: 'center'
+                    }}>
+                      <Info size={14} style={{ color: 'var(--accent-indigo)', flexShrink: 0 }} />
+                      <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-indigo)' }}>
+                        Background processing active. Safe to close tab.
+                      </span>
+                    </div>
+                  )}
                 </>
               );
             })()}
           </div>
-
-          {/* Body content */}
-          {(() => {
-            const isFinished = uploadProgress.current === uploadProgress.total;
-            const isStarting = uploadProgress.current === 0;
-            
-            if (isFinished) {
-              return (
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', lineHeight: '1.5' }}>
-                  Successfully processed all {uploadProgress.total} candidates.
-                </p>
-              );
-            } else if (isStarting) {
-              const stage = uploadProgress.currentStage || "Initializing background evaluation...";
-              return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0, lineHeight: '1.4' }}>
-                    All {uploadProgress.total} file(s) received by the server.
-                  </p>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-muted)', flexShrink: 0 }}>
-                      Status:
-                    </span>
-                    <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-indigo)', lineHeight: '1.4' }}>
-                      {stage}
-                    </span>
-                  </div>
-                </div>
-              );
-            } else {
-              const stage = uploadProgress.currentStage || "Processing...";
-              const fileNum = Math.min(uploadProgress.current + 1, uploadProgress.total);
-              return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', flexShrink: 0 }}>
-                      File {fileNum} of {uploadProgress.total}:
-                    </span>
-                    <span style={{ 
-                      fontSize: '0.8rem', 
-                      fontWeight: '600', 
-                      color: 'var(--text-title)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      maxWidth: '220px'
-                    }} title={uploadProgress.fileName}>
-                      {uploadProgress.fileName}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-muted)', flexShrink: 0 }}>
-                      Status:
-                    </span>
-                    <span style={{ 
-                      fontSize: '0.75rem', 
-                      fontWeight: '600', 
-                      color: 'var(--accent-indigo)',
-                      lineHeight: '1.4',
-                      wordBreak: 'break-word'
-                    }}>
-                      {stage}
-                    </span>
-                  </div>
-                </div>
-              );
-            }
-          })()}
-
-          {/* Progress bar */}
-          {(() => {
-            const isFinished = uploadProgress.current === uploadProgress.total;
-            const isStarting = uploadProgress.current === 0;
-            const pct = uploadProgress.total > 0 ? Math.round((uploadProgress.current / uploadProgress.total) * 100) : 0;
-            return (
-              <div style={styles.progressBarTrack}>
-                <div
-                  style={{
-                    ...styles.progressBarFill,
-                    width: isStarting ? '12%' : `${pct}%`,
-                    background: isFinished ? 'var(--accent-emerald)' : 'var(--accent-indigo)',
-                    animation: isStarting ? 'progressPulse 1.5s ease-in-out infinite' : 'none'
-                  }}
-                />
-              </div>
-            );
-          })()}
-
-          {/* Bottom notice banner */}
-          {(() => {
-            const isFinished = uploadProgress.current === uploadProgress.total;
-            if (isFinished) {
-              return (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '8px 12px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'rgba(16, 185, 129, 0.08)',
-                  border: '1px solid rgba(16, 185, 129, 0.2)',
-                  marginTop: '10px',
-                }}>
-                  <CheckCircle2 size={13} style={{ color: 'var(--accent-emerald)', flexShrink: 0 }} />
-                  <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-emerald)' }}>
-                    All candidate evaluations are updated
-                  </span>
-                </div>
-              );
-            } else {
-              return (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '8px 12px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'rgba(99, 102, 241, 0.08)',
-                  border: '1px solid rgba(99, 102, 241, 0.2)',
-                  marginTop: '10px',
-                }}>
-                  <Clock size={13} style={{ color: 'var(--accent-indigo)', flexShrink: 0 }} />
-                  <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--accent-indigo)' }}>
-                    Safe to close tab — processing continues on the server
-                  </span>
-                </div>
-              );
-            }
-          })()}
         </div>
       )}
 
-      {/* Initial loading state progress popup */}
+      {/* Initial uploading blocking overlay modal */}
       {(loading && !uploadProgress) && (
-        <div style={styles.floatingProgressCard} className="animate-scale-up">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Clock size={16} className="animate-spin" style={{ color: 'var(--accent-indigo)' }} />
-            <span style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--text-title)' }}>Uploading files to server...</span>
-          </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px', marginBottom: '0' }}>
-            Please keep this tab open until the upload finishes.
-          </p>
-          <div style={{ ...styles.progressBarTrack, marginTop: '12px' }}>
-            <div style={{ ...styles.progressBarFill, width: '20%', animation: 'progressPulse 1.5s ease-in-out infinite' }} />
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.4)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }} className="animate-fade-in">
+          
+          <div style={{
+            width: '450px',
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--border-glass)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-premium)',
+            padding: '36px 32px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+          }} className="animate-scale-up">
+            
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(99, 102, 241, 0.08)',
+              border: '1px solid rgba(99, 102, 241, 0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '20px',
+              color: 'var(--accent-indigo)'
+            }}>
+              <Clock size={32} className="animate-spin" />
+            </div>
+
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: '800',
+              color: 'var(--text-title)',
+              margin: '0 0 8px 0',
+              lineHeight: '1.2'
+            }}>
+              Uploading Files to Server...
+            </h3>
+
+            <p style={{
+              fontSize: '0.85rem',
+              color: 'var(--text-muted)',
+              margin: '0 0 24px 0',
+              lineHeight: '1.5',
+              maxWidth: '340px'
+            }}>
+              Please keep this tab open and do not refresh while the documents are being uploaded to the assessment pipeline.
+            </p>
+
+            <div style={{ width: '100%' }}>
+              <div style={{ ...styles.progressBarTrack, height: '8px', marginTop: 0 }}>
+                <div style={{ ...styles.progressBarFill, width: '20%', animation: 'progressPulse 1.5s ease-in-out infinite' }} />
+              </div>
+            </div>
+
           </div>
         </div>
       )}

@@ -31,6 +31,9 @@ interface CVContextType {
   selectJob: (job: Job) => void;
   loadEvaluatedCVs: (filterJobId?: string) => Promise<void>;
   extendJobLifespan: (jobId: string, days: number) => Promise<void>;
+  isReEvaluating: boolean;
+  reEvaluateCVs: (jobId: string, threshold: number) => Promise<void>;
+  setUploadProgress: (progress: UploadProgress | null) => void;
 }
 
 const getLinkedinUrl = (urls: string[], name: string): string | undefined => {
@@ -150,6 +153,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [jobsList, setJobsList] = useState<Job[]>([]);
+  const [isReEvaluating, setIsReEvaluating] = useState<boolean>(false);
   const autoCloseTimeoutRef = useRef<any>(null);
 
   // Fetch the latest job details and historical applications when user signs in
@@ -163,6 +167,11 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       const savedJobTitle = localStorage.getItem('active_cv_batch_job_title');
       const savedJobDesc = localStorage.getItem('active_cv_batch_job_desc');
       
+      const savedReevalJobId = localStorage.getItem('active_reeval_job_id');
+      const savedReevalJobTitle = localStorage.getItem('active_reeval_job_title');
+      const savedReevalJobDesc = localStorage.getItem('active_reeval_job_desc');
+      const savedReevalThreshold = localStorage.getItem('active_reeval_threshold');
+      
       if (savedBatchId && savedTotal && savedJobId && savedJobTitle) {
         setJobId(savedJobId);
         setJobTitle(savedJobTitle);
@@ -172,6 +181,15 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         loadEvaluatedCVs(savedJobId);
         const total = parseInt(savedTotal, 10);
         resumeBatchMonitoring(savedBatchId, total, savedJobId, savedJobTitle);
+      } else if (savedReevalJobId && savedReevalThreshold && savedReevalJobTitle) {
+        setJobId(savedReevalJobId);
+        setJobTitle(savedReevalJobTitle);
+        if (savedReevalJobDesc) {
+          setJobDescriptionState(savedReevalJobDesc);
+        }
+        loadEvaluatedCVs(savedReevalJobId);
+        const threshold = parseFloat(savedReevalThreshold);
+        reEvaluateCVs(savedReevalJobId, threshold);
       } else {
         startNewJob();
         loadEvaluatedCVs();
@@ -358,6 +376,22 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         localStorage.removeItem('active_cv_batch_job_id');
         localStorage.removeItem('active_cv_batch_job_title');
         localStorage.removeItem('active_cv_batch_job_desc');
+
+        // Check for active re-evaluation in backend
+        try {
+          const statusUrl = `http://localhost:8000/api/v1/applications/re-evaluate/status?job_id=${encodeURIComponent(job.jobId)}`;
+          const res = await fetch(statusUrl, { credentials: 'include' });
+          if (res.ok) {
+            const reevalState = await res.json();
+            if (reevalState.active) {
+              const savedThreshold = localStorage.getItem('active_reeval_threshold') || '50';
+              const threshold = parseFloat(savedThreshold);
+              reEvaluateCVs(job.jobId, threshold);
+            }
+          }
+        } catch (e) {
+          console.error("Error checking active re-evaluation state:", e);
+        }
       }
     } catch (err) {
       console.warn('Failed to check active batch on selectJob:', err);
@@ -567,6 +601,115 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   };
 
   /**
+   * Re-evaluates CVs for a specific job description with custom similarity threshold in background.
+   */
+  const reEvaluateCVs = async (targetJobId: string, threshold: number) => {
+    if (autoCloseTimeoutRef.current) {
+      clearTimeout(autoCloseTimeoutRef.current);
+      autoCloseTimeoutRef.current = null;
+    }
+    
+    // Save to localStorage so it can be resumed on reload/reconnect
+    localStorage.setItem('active_reeval_job_id', targetJobId);
+    localStorage.setItem('active_reeval_job_title', jobTitle);
+    localStorage.setItem('active_reeval_job_desc', jobDescription);
+    localStorage.setItem('active_reeval_threshold', threshold.toString());
+
+    setIsReEvaluating(true);
+    setUploadProgress({
+      current: 0,
+      total: 0,
+      fileName: 'Initializing...',
+      status: 'uploaded',
+      currentStage: 'Starting re-evaluation...',
+    });
+
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    try {
+      const url = `http://localhost:8000/api/v1/applications/re-evaluate/stream?job_id=${encodeURIComponent(targetJobId)}&threshold=${threshold}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to initiate re-evaluation stream.');
+      }
+
+      reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Response body is not readable.');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+
+          try {
+            const data = JSON.parse(trimmed.slice(6));
+            if (data.type === 'init') {
+              setUploadProgress({
+                current: 0,
+                total: data.total,
+                fileName: 'Starting...',
+                status: 'uploading',
+                currentStage: 'Re-evaluating candidates...'
+              });
+            } else if (data.type === 'progress') {
+              setUploadProgress({
+                current: data.current,
+                total: data.total,
+                fileName: data.name,
+                status: 'uploading',
+                currentStage: `Evaluating ${data.name}...`
+              });
+            } else if (data.type === 'completed') {
+              setUploadProgress({
+                current: data.total_processed,
+                total: data.total_processed,
+                fileName: 'Finished',
+                status: 'completed',
+                currentStage: `Successfully re-evaluated all ${data.total_processed} applications!`
+              });
+            } else if (data.type === 'error') {
+              setError(data.detail || 'Error during re-evaluation.');
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        }
+      }
+
+      await loadEvaluatedCVs(targetJobId);
+    } catch (e: any) {
+      setError(e.message || 'Error occurred during streaming.');
+    } finally {
+      localStorage.removeItem('active_reeval_job_id');
+      localStorage.removeItem('active_reeval_job_title');
+      localStorage.removeItem('active_reeval_job_desc');
+      localStorage.removeItem('active_reeval_threshold');
+      
+      setIsReEvaluating(false);
+      autoCloseTimeoutRef.current = setTimeout(() => {
+        setUploadProgress(null);
+        autoCloseTimeoutRef.current = null;
+      }, 3000);
+      reader?.releaseLock();
+    }
+  };
+
+  /**
    * Removes a CV from the candidate grid.
    */
   const deleteCV = async (cvId: string) => {
@@ -625,6 +768,9 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         selectJob,
         loadEvaluatedCVs,
         extendJobLifespan,
+        isReEvaluating,
+        reEvaluateCVs,
+        setUploadProgress,
       }}
     >
       {children}

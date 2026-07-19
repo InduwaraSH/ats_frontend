@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './presentation/contexts/AuthContext';
 import { CVProvider } from './presentation/contexts/CVContext';
 import { ToastProvider } from './presentation/contexts/ToastContext';
 import { LoginPage } from './presentation/pages/LoginPage';
+import { SignupPage } from './presentation/pages/SignupPage';
 import { DashboardPage } from './presentation/pages/DashboardPage';
 import { Loader2 } from 'lucide-react';
 import './presentation/styles/index.css';
@@ -12,6 +13,7 @@ import './presentation/styles/index.css';
  */
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
+  const [showSignup, setShowSignup] = useState(false);
 
   // Show a full-screen loading spinner while verifying active sessions (localStorage check)
   if (loading) {
@@ -27,7 +29,11 @@ const AppContent: React.FC = () => {
 
   if (user) return <DashboardPage />;
 
-  return <LoginPage />;
+  if (showSignup) {
+    return <SignupPage onNavigateToLogin={() => setShowSignup(false)} />;
+  }
+
+  return <LoginPage onNavigateToSignup={() => setShowSignup(true)} />;
 };
 
 export default function App() {

@@ -7,10 +7,8 @@ interface SignupPageProps {
 }
 
 const ROLE_OPTIONS = [
-  { value: 'recruiter', label: 'Recruiter' },
-  { value: 'hiring_manager', label: 'Hiring Manager' },
-  { value: 'interviewer', label: 'Interviewer' },
   { value: 'admin', label: 'Admin' },
+  { value: 'user', label: 'User' },
 ];
 
 export const SignupPage: React.FC<SignupPageProps> = ({ onNavigateToLogin }) => {
@@ -20,7 +18,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigateToLogin }) => 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState('recruiter');
+  const [role, setRole] = useState('user');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 

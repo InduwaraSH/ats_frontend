@@ -777,31 +777,6 @@ export const DashboardPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* 3. Candidate Review Stats Badge */}
-                {(activeJobId && jobCVs.length > 0) && (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    border: '1px solid var(--border-glass)',
-                    borderRadius: 'var(--radius-sm)',
-                    backgroundColor: 'rgba(255, 255, 255, 0.5)',
-                    padding: '4px 10px',
-                    height: '32px',
-                    gap: '8px',
-                    fontSize: '0.78rem',
-                    color: 'var(--text-muted)'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--accent-emerald)' }} />
-                      <span><strong style={{ color: 'var(--accent-emerald)' }}>{above50.length}</strong> selected</span>
-                    </div>
-                    <span style={{ color: 'var(--border-glass)' }}>|</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--accent-rose)' }} />
-                      <span><strong style={{ color: 'var(--accent-rose)' }}>{below50.length}</strong> review</span>
-                    </div>
-                  </div>
-                )}
 
                 {/* 4. Specs Details Dropdown Toggle */}
                 {jobCVs.length > 0 && (

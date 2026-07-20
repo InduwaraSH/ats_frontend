@@ -17,6 +17,13 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface SignupPayload {
+  full_name: string;
+  email: string;
+  password: string;
+  role: string;
+}
+
 export interface LoginResponse {
   message: string;
 }
@@ -97,4 +104,17 @@ export async function apiLogout(): Promise<void> {
   if (!res.ok) {
     console.warn(`Logout request returned ${res.status}`);
   }
+}
+
+/** POST /user-add — registers a new user using the shared external api key bearer token. */
+export async function apiSignup(payload: SignupPayload): Promise<UserResponse> {
+  const res = await fetchWithTimeout(`${BASE}/user-add`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ats_company_site_bearer_secret_2026_xyz',
+    },
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<UserResponse>(res);
 }

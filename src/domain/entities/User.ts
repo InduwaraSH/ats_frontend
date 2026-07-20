@@ -6,6 +6,6 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'recruiter' | 'hiring_manager' | 'interviewer';
+  role: 'admin' | 'recruiter' | 'hiring_manager' | 'interviewer' | 'user';
   is_active: boolean;
 }

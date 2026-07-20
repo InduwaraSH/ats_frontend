@@ -11,6 +11,11 @@ export interface IAuthService {
   login(email: string, password: string): Promise<User>;
 
   /**
+   * Registers a new user.
+   */
+  signup(fullName: string, email: string, password: string, role: string): Promise<User>;
+
+  /**
    * Ends the current user session.
    */
   logout(): Promise<void>;

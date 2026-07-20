@@ -239,6 +239,17 @@ body::after {
   width: 100%;
 }
 
+select.form-control {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 16px;
+  padding-right: 40px;
+}
+
 .form-control:focus {
   outline: none;
   border-color: var(--accent-indigo);
@@ -443,4 +454,22 @@ body::after {
 .upload-zone-expand {
   animation: expandZone 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   overflow: hidden;
+}
+
+/* Responsive Right Sidebar Control Panel */
+.right-sidebar {
+  width: 220px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (min-width: 1400px) {
+  .right-sidebar {
+    width: 280px;
+  }
+}
+
+@media (min-width: 1800px) {
+  .right-sidebar {
+    width: 320px;
+  }
 }

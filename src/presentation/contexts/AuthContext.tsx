@@ -10,6 +10,7 @@ interface AuthContextType {
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  signup: (fullName: string, email: string, password: string, role: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -70,10 +71,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signup = async (fullName: string, email: string, password: string, role: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await authService.signup(fullName, email, password, role);
+      showToast('Account created successfully. Please login.', 'success');
+    } catch (err: any) {
+      setError(err.message || 'Registration failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const clearError = () => setError(null);
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, logout, clearError }}>
+    <AuthContext.Provider value={{ user, loading, error, login, logout, signup, clearError }}>
       {children}
     </AuthContext.Provider>
   );

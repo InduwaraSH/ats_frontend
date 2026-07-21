@@ -1,15 +1,10 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { KeyRound, Mail, User, Briefcase, AlertTriangle, CheckCircle, Loader2, ArrowLeft } from 'lucide-react';
+import { KeyRound, Mail, User, AlertTriangle, CheckCircle, Loader2, ArrowLeft } from 'lucide-react';
 
 interface SignupPageProps {
   onNavigateToLogin: () => void;
 }
-
-const ROLE_OPTIONS = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'user', label: 'User' },
-];
 
 export const SignupPage: React.FC<SignupPageProps> = ({ onNavigateToLogin }) => {
   const { signup, error, clearError } = useAuth();
@@ -18,7 +13,6 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigateToLogin }) => 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState('user');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -46,7 +40,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigateToLogin }) => 
 
     setIsSubmitting(true);
     try {
-      await signup(fullName.trim(), email.trim(), password, role);
+      await signup(fullName.trim(), email.trim(), password, 'user');
     } catch {
       // Error displayed via AuthContext's error state
     } finally {
@@ -116,26 +110,6 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigateToLogin }) => 
                 style={{ paddingLeft: '44px' }}
                 autoComplete="email"
               />
-            </div>
-          </div>
-
-          {/* Role */}
-          <div className="form-group">
-            <label className="form-label" htmlFor="role">Role</label>
-            <div style={styles.inputWrapper}>
-              <Briefcase size={18} style={styles.inputIcon} />
-              <select
-                id="role"
-                className="form-control"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                disabled={isSubmitting}
-                style={{ paddingLeft: '44px', cursor: 'pointer' }}
-              >
-                {ROLE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
             </div>
           </div>
 

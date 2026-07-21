@@ -115,6 +115,62 @@ export async function apiSignup(payload: SignupPayload): Promise<UserResponse> {
       'Authorization': 'Bearer ats_company_site_bearer_secret_2026_xyz',
     },
     body: JSON.stringify(payload),
+    credentials: 'include',
+  });
+  return parseResponse<UserResponse>(res);
+}
+
+export const apiAddUser = apiSignup;
+
+/** DELETE /user-delete — deletes a user using the external bearer key. */
+export async function apiDeleteUser(email: string): Promise<{ message: string; email: string }> {
+  const res = await fetchWithTimeout(`${BASE}/user-delete`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ats_company_site_bearer_secret_2026_xyz',
+    },
+    body: JSON.stringify({ email }),
+    credentials: 'include',
+  });
+  return parseResponse<{ message: string; email: string }>(res);
+}
+
+/** GET /users — fetch list of all system users. */
+export async function apiGetAllUsers(): Promise<UserResponse[]> {
+  const res = await fetchWithTimeout(`${BASE}/users`, {
+    headers: {
+      'Authorization': 'Bearer ats_company_site_bearer_secret_2026_xyz',
+    },
+    credentials: 'include',
+  });
+  return parseResponse<UserResponse[]>(res);
+}
+
+/** PATCH /user-status — update block/active status of a user. */
+export async function apiUpdateUserStatus(email: string, is_active: boolean): Promise<UserResponse> {
+  const res = await fetchWithTimeout(`${BASE}/user-status`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ats_company_site_bearer_secret_2026_xyz',
+    },
+    body: JSON.stringify({ email, is_active }),
+    credentials: 'include',
+  });
+  return parseResponse<UserResponse>(res);
+}
+
+/** PATCH /user-role — update role (admin vs user/recruiter) of a user. */
+export async function apiUpdateUserRole(email: string, role: string): Promise<UserResponse> {
+  const res = await fetchWithTimeout(`${BASE}/user-role`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ats_company_site_bearer_secret_2026_xyz',
+    },
+    body: JSON.stringify({ email, role }),
+    credentials: 'include',
   });
   return parseResponse<UserResponse>(res);
 }

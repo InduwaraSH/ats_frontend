@@ -362,6 +362,14 @@ select.form-control {
   background-color: rgba(15, 23, 42, 0.03) !important;
 }
 
+.dropdown-admin-btn-el:hover {
+  background-color: var(--accent-indigo-glow) !important;
+}
+
+.dropdown-logout-btn-el:hover {
+  background-color: var(--accent-rose-glow) !important;
+}
+
 /* Double Range Slider Styling */
 .double-slider-container {
   position: relative;

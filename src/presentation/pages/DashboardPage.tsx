@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCV } from '../contexts/CVContext';
 import { useToast } from '../contexts/ToastContext';
 import type { CV } from '../../domain/entities/CV';
+import { AdminDashboardPage } from './AdminDashboardPage';
 
 import {
   LogOut,
@@ -26,7 +27,8 @@ import {
   Plus,
   ChevronDown,
   Search,
-  Calendar
+  Calendar,
+  Shield
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -90,6 +92,7 @@ export const DashboardPage: React.FC = () => {
   const [needsReviewExpanded, setNeedsReviewExpanded] = useState(false);
   const [activeModalTab, setActiveModalTab] = useState<'assessment' | 'pdf'>('assessment');
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<'workspace' | 'admin'>('workspace');
   const [uploadZoneExpanded, setUploadZoneExpanded] = useState(false);
   const [specCardExpanded, setSpecCardExpanded] = useState(true);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -111,6 +114,35 @@ export const DashboardPage: React.FC = () => {
   useEffect(() => {
     setJdText(jobDescription);
   }, [jobDescription]);
+
+  // Sync URL path (/admin) and enforce Admin role protection
+  useEffect(() => {
+    const isAdminPath = window.location.pathname === '/admin' || window.location.hash === '#admin';
+    if (isAdminPath) {
+      if (user?.role?.toLowerCase() === 'admin') {
+        setCurrentView('admin');
+      } else if (user) {
+        // Non-admin user trying to access /admin via URL manipulation!
+        window.history.replaceState({}, '', '/');
+        setCurrentView('workspace');
+        showToast('Access Denied: Admin privileges required.', 'error');
+      }
+    }
+  }, [user]);
+
+  // Handle browser Back / Forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      const isAdminPath = window.location.pathname === '/admin' || window.location.hash === '#admin';
+      if (isAdminPath && user?.role?.toLowerCase() === 'admin') {
+        setCurrentView('admin');
+      } else {
+        setCurrentView('workspace');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [user]);
 
   useEffect(() => {
     setTitleText(jobTitle);
@@ -444,6 +476,17 @@ export const DashboardPage: React.FC = () => {
     return score % 1 === 0 ? score.toFixed(0) : score.toFixed(1);
   };
 
+  if (currentView === 'admin') {
+    return (
+      <AdminDashboardPage
+        onBack={() => {
+          window.history.pushState({}, '', '/');
+          setCurrentView('workspace');
+        }}
+      />
+    );
+  }
+
   return (
     <div style={styles.dashboardContainer}>
       {/* 1. Left Sidebar (ChatGPT Chat History style) */}
@@ -649,12 +692,26 @@ export const DashboardPage: React.FC = () => {
                     {user?.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={styles.dropdownUserName}>Recruiter Admin</div>
+                    <div style={styles.dropdownUserName}>{user?.name || 'Recruiter Admin'}</div>
                     <div style={styles.dropdownUserEmail} title={user?.email}>{user?.email}</div>
                   </div>
                 </div>
                 <div style={styles.dropdownDivider} />
-                <button onClick={logout} style={styles.dropdownLogoutBtn}>
+                {(user?.role?.toLowerCase() === 'admin') && (
+                  <button
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      window.history.pushState({}, '', '/admin');
+                      setCurrentView('admin');
+                    }}
+                    className="dropdown-admin-btn-el"
+                    style={styles.dropdownAdminBtn}
+                  >
+                    <Shield size={14} />
+                    <span>Admin</span>
+                  </button>
+                )}
+                <button onClick={logout} className="dropdown-logout-btn-el" style={styles.dropdownLogoutBtn}>
                   <LogOut size={14} />
                   <span>Sign Out</span>
                 </button>
@@ -2814,6 +2871,23 @@ const styles: Record<string, React.CSSProperties> = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     maxWidth: '160px',
+  },
+  dropdownAdminBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    width: '100%',
+    padding: '8px 10px',
+    background: 'none',
+    border: 'none',
+    color: 'var(--accent-indigo)',
+    cursor: 'pointer',
+    borderRadius: 'var(--radius-sm)',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    textAlign: 'left',
+    marginBottom: '4px',
+    transition: 'var(--transition-smooth)',
   },
   dropdownLogoutBtn: {
     display: 'flex',

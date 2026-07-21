@@ -1,12 +1,13 @@
 import type { ICVService, UploadProgress } from '../../application/services/ICVService';
 import type { MatchResult } from '../../domain/entities/MatchResult';
+import { API_BASE_URL } from '../config/apiConfig';
 
 /**
  * Real implementation of ICVService that connects to the FastAPI backend.
  * Uses database polling for upload progress tracking (resilient to tab closure).
  */
 export class CVService implements ICVService {
-  private API_BASE_URL = 'http://localhost:8000/api/v1';
+  private API_BASE_URL = API_BASE_URL;
 
   /**
    * Uploads CV files to the backend and polls for progress.

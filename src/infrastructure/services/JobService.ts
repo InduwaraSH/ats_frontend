@@ -1,11 +1,12 @@
 import type { IJobService } from '../../application/services/IJobService';
 import type { Job } from '../../domain/entities/Job';
+import { API_BASE_URL } from '../config/apiConfig';
 
 /**
  * Real implementation of IJobService connecting to FastAPI backend job endpoint.
  */
 export class JobService implements IJobService {
-  private API_BASE_URL = 'http://localhost:8000/api/v1';
+  private API_BASE_URL = API_BASE_URL;
 
   async saveJob(job: Job): Promise<Job> {
     const response = await fetch(`${this.API_BASE_URL}/job/`, {

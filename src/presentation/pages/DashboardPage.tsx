@@ -4,6 +4,8 @@ import { useCV } from '../contexts/CVContext';
 import { useToast } from '../contexts/ToastContext';
 import type { CV } from '../../domain/entities/CV';
 import { AdminDashboardPage } from './AdminDashboardPage';
+import { API_BASE_URL } from '../../infrastructure/config/apiConfig';
+import { CVDetailModal } from '../components/CVDetailModal';
 
 import {
   LogOut,
@@ -426,7 +428,7 @@ export const DashboardPage: React.FC = () => {
         });
         setUploadZoneExpanded(false); // Auto-collapse upload zone after analyze
       }
-    } catch (err: any) {
+    } catch {
       setSelectedFiles(filesToUpload); // Restore files on failure
     }
   };
@@ -434,10 +436,10 @@ export const DashboardPage: React.FC = () => {
   const handleBulkDownload = () => {
     const targetJobId = activeJobId || jobId;
     if (!targetJobId) {
-      alert("Please select or save a job first.");
+      showToast("Please select or save a job first.", "error");
       return;
     }
-    const url = `http://localhost:8000/api/v1/applications/bulk-download?job_id=${encodeURIComponent(targetJobId)}&min_score=${bulkMinScore}&max_score=${bulkMaxScore}`;
+    const url = `${API_BASE_URL}/applications/bulk-download?job_id=${encodeURIComponent(targetJobId)}&min_score=${bulkMinScore}&max_score=${bulkMaxScore}`;
     window.open(url, '_blank');
   };
 
@@ -2372,7 +2374,7 @@ export const DashboardPage: React.FC = () => {
               /* Live PDF Viewer Tab */
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-main)', position: 'relative' }}>
                 <iframe
-                  src={`http://localhost:8000/api/v1/applications/${selectedCV.id}/download?inline=true#view=FitH&toolbar=0`}
+                  src={`${API_BASE_URL}/applications/${selectedCV.id}/download?inline=true#view=FitH&toolbar=0`}
                   width="100%"
                   height="100%"
                   style={{ border: 'none', flex: 1 }}
@@ -2384,7 +2386,7 @@ export const DashboardPage: React.FC = () => {
             {/* Modal Footer */}
             <div style={styles.modalFooter}>
               <a
-                href={`http://localhost:8000/api/v1/applications/${selectedCV.id}/download`}
+                href={`${API_BASE_URL}/applications/${selectedCV.id}/download`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-primary"
@@ -2411,6 +2413,9 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Detailed Candidate CV Matching Modal */}
+      <CVDetailModal selectedCV={selectedCV} onClose={() => setSelectedCV(null)} />
 
       {/* Custom Delete Confirmation Modal */}
       {deleteConfirmation.isOpen && (

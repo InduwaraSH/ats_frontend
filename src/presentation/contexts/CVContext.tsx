@@ -5,6 +5,7 @@ import type { UploadProgress } from '../../application/services/ICVService';
 import { JobService } from '../../infrastructure/services/JobService';
 import type { Job } from '../../domain/entities/Job';
 import { useAuth } from './AuthContext';
+import { API_BASE_URL } from '../../infrastructure/config/apiConfig';
 
 // Define context state schema
 interface CVContextType {
@@ -210,8 +211,8 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     try {
       const activeId = filterJobId ?? jobId;
       const url = activeId 
-        ? `http://localhost:8000/api/v1/applications/?job_id=${encodeURIComponent(activeId)}` 
-        : 'http://localhost:8000/api/v1/applications/';
+        ? `${API_BASE_URL}/applications/?job_id=${encodeURIComponent(activeId)}` 
+        : `${API_BASE_URL}/applications/`;
       const response = await fetch(url, {
         credentials: 'include',
       });
@@ -379,7 +380,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
         // Check for active re-evaluation in backend
         try {
-          const statusUrl = `http://localhost:8000/api/v1/applications/re-evaluate/status?job_id=${encodeURIComponent(job.jobId)}`;
+          const statusUrl = `${API_BASE_URL}/applications/re-evaluate/status?job_id=${encodeURIComponent(job.jobId)}`;
           const res = await fetch(statusUrl, { credentials: 'include' });
           if (res.ok) {
             const reevalState = await res.json();
@@ -626,7 +627,7 @@ export const CVProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
-      const url = `http://localhost:8000/api/v1/applications/re-evaluate/stream?job_id=${encodeURIComponent(targetJobId)}&threshold=${threshold}`;
+      const url = `${API_BASE_URL}/applications/re-evaluate/stream?job_id=${encodeURIComponent(targetJobId)}&threshold=${threshold}`;
       const response = await fetch(url, {
         method: 'POST',
         credentials: 'include'

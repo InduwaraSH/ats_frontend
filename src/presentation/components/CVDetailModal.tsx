@@ -22,6 +22,11 @@ interface CVDetailModalProps {
 
 export const CVDetailModal: React.FC<CVDetailModalProps> = ({ selectedCV, onClose }) => {
   const [activeModalTab, setActiveModalTab] = useState<'assessment' | 'pdf'>('assessment');
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setIsScrolled(e.currentTarget.scrollTop > 60);
+  };
 
   if (!selectedCV || !selectedCV.matchDetails) return null;
 
@@ -46,140 +51,180 @@ export const CVDetailModal: React.FC<CVDetailModalProps> = ({ selectedCV, onClos
 
   return (
     <div style={styles.modalOverlay} className="animate-fade-in" onClick={onClose}>
+      
+      {/* LEFT SIDEBAR (Tabs) */}
+      <div style={styles.leftSidebar}>
+        <button
+          onClick={(e) => { e.stopPropagation(); setActiveModalTab('assessment'); }}
+          style={{
+            ...styles.sidebarBtn,
+            opacity: activeModalTab === 'assessment' ? 1 : 0.7,
+            fontWeight: '600',
+            color: '#ffffff',
+            backgroundColor: activeModalTab === 'assessment' ? 'rgba(255,255,255,0.15)' : 'transparent',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            width: '100%',
+            textAlign: 'left',
+            boxShadow: activeModalTab === 'assessment' ? '0 4px 15px rgba(0,0,0,0.1)' : 'none',
+            border: activeModalTab === 'assessment' ? '1px solid rgba(255,255,255,0.2)' : '1px solid transparent',
+          }}
+        >
+          Assessment Report
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); setActiveModalTab('pdf'); }}
+          style={{
+            ...styles.sidebarBtn,
+            opacity: activeModalTab === 'pdf' ? 1 : 0.7,
+            fontWeight: '600',
+            color: '#ffffff',
+            backgroundColor: activeModalTab === 'pdf' ? 'rgba(255,255,255,0.15)' : 'transparent',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            width: '100%',
+            textAlign: 'left',
+            boxShadow: activeModalTab === 'pdf' ? '0 4px 15px rgba(0,0,0,0.1)' : 'none',
+            border: activeModalTab === 'pdf' ? '1px solid rgba(255,255,255,0.2)' : '1px solid transparent',
+          }}
+        >
+          Original Resume PDF
+        </button>
+      </div>
+
       <div
         className="glass-panel animate-scale-up"
         style={styles.modalContent}
         onClick={(e) => e.stopPropagation()} // Prevent closing
       >
-        {/* Modal Header */}
-        <div style={styles.modalHeader}>
-          <div>
-            <h3 style={styles.modalTitle}>{selectedCV.applicantName}</h3>
-            <p style={styles.modalSubtitle}>Detailed Assessment & Match Analytics</p>
-            {/* Profile Links */}
-            {(selectedCV.githubUrl || selectedCV.linkedinUrl) && (
-              <div style={{ display: 'flex', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
-                {selectedCV.githubUrl && (
-                  <a
-                    href={
-                      selectedCV.githubUrl.startsWith('http')
-                        ? selectedCV.githubUrl
-                        : `https://${selectedCV.githubUrl}`
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      fontSize: '0.78rem',
-                      fontWeight: '600',
-                      color: 'var(--accent-indigo)',
-                      textDecoration: 'none',
-                      backgroundColor: 'var(--accent-indigo-glow)',
-                      padding: '3px 10px',
-                      borderRadius: '20px',
-                      border: '1px solid rgba(99,102,241,0.2)',
-                    }}
-                  >
-                    <Code size={12} />
-                    GitHub
-                    <ExternalLink size={10} />
-                  </a>
-                )}
-                {selectedCV.linkedinUrl && (
-                  <a
-                    href={
-                      selectedCV.linkedinUrl.startsWith('http')
-                        ? selectedCV.linkedinUrl
-                        : `https://${selectedCV.linkedinUrl}`
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      fontSize: '0.78rem',
-                      fontWeight: '600',
-                      color: '#0a66c2',
-                      textDecoration: 'none',
-                      backgroundColor: 'rgba(10, 102, 194, 0.08)',
-                      padding: '3px 10px',
-                      borderRadius: '20px',
-                      border: '1px solid rgba(10, 102, 194, 0.2)',
-                    }}
-                  >
-                    <ExternalLink size={10} />
-                    LinkedIn
-                    <ExternalLink size={10} />
-                  </a>
+        {/* SINGLE SCROLL CONTAINER */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', position: 'relative' }} onScroll={handleScroll}>
+          {/* STICKY GLASSMORPHIC HEADER */}
+          <div
+            style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 50,
+              backgroundColor: 'rgba(255, 255, 255, 0.5)',
+              backdropFilter: 'blur(30px)',
+              WebkitBackdropFilter: 'blur(30px)',
+              boxShadow: '0 4px 30px rgba(0, 0, 0, 0.05)',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.6)',
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ ...styles.modalHeader, backgroundColor: 'transparent', borderBottom: 'none' }}>
+              <div>
+                <h3 style={styles.modalTitle}>{selectedCV.applicantName}</h3>
+                <p style={styles.modalSubtitle}>Detailed Assessment & Match Analytics</p>
+                {/* Profile Links */}
+                {(selectedCV.githubUrl || selectedCV.linkedinUrl) && (
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
+                    {selectedCV.githubUrl && (
+                      <a
+                        href={
+                          selectedCV.githubUrl.startsWith('http')
+                            ? selectedCV.githubUrl
+                            : `https://${selectedCV.githubUrl}`
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          fontSize: '0.78rem',
+                          fontWeight: '600',
+                          color: 'var(--accent-indigo)',
+                          textDecoration: 'none',
+                          backgroundColor: 'var(--accent-indigo-glow)',
+                          padding: '3px 10px',
+                          borderRadius: '20px',
+                          border: '1px solid rgba(99,102,241,0.2)',
+                        }}
+                      >
+                        <Code size={12} />
+                        GitHub
+                        <ExternalLink size={10} />
+                      </a>
+                    )}
+                    {selectedCV.linkedinUrl && (
+                      <a
+                        href={
+                          selectedCV.linkedinUrl.startsWith('http')
+                            ? selectedCV.linkedinUrl
+                            : `https://${selectedCV.linkedinUrl}`
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          fontSize: '0.78rem',
+                          fontWeight: '600',
+                          color: '#0a66c2',
+                          textDecoration: 'none',
+                          backgroundColor: 'rgba(10, 102, 194, 0.08)',
+                          padding: '3px 10px',
+                          borderRadius: '20px',
+                          border: '1px solid rgba(10, 102, 194, 0.2)',
+                        }}
+                      >
+                        <ExternalLink size={10} />
+                        LinkedIn
+                        <ExternalLink size={10} />
+                      </a>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-          <button style={styles.modalClose} onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                {/* Smoothly Appears on Scroll Header Badge */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    backgroundColor: getScoreBgGlow(selectedCV.matchScore || 0),
+                    border: `1px solid ${getScoreColor(selectedCV.matchScore || 0)}`,
+                    padding: '4px 16px',
+                    borderRadius: '30px',
+                    opacity: isScrolled && activeModalTab === 'assessment' ? 1 : 0,
+                    transform: isScrolled && activeModalTab === 'assessment' ? 'translateY(0) translateX(0) scale(1)' : 'translateY(40px) translateX(-40px) scale(1.2)',
+                    transformOrigin: 'top right',
+                    pointerEvents: isScrolled && activeModalTab === 'assessment' ? 'auto' : 'none',
+                    transition: 'all 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
+                  }}
+                >
+                  <div style={{ fontWeight: '800', color: getScoreColor(selectedCV.matchScore || 0), fontSize: '1.1rem' }}>
+                    {formatScore(selectedCV.matchScore)}%
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <span style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--text-title)', lineHeight: '1.1' }}>Overall Score</span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-        {/* Modal Tabs Selector */}
-        <div
-          style={{
-            display: 'flex',
-            borderBottom: '1px solid var(--border-glass)',
-            padding: '0 32px',
-            backgroundColor: 'var(--bg-surface)',
-          }}
-        >
-          <button
-            onClick={() => setActiveModalTab('assessment')}
-            style={{
-              padding: '16px 20px',
-              fontSize: '0.9rem',
-              fontWeight: '600',
-              color: activeModalTab === 'assessment' ? 'var(--accent-indigo)' : 'var(--text-muted)',
-              borderBottom:
-                activeModalTab === 'assessment'
-                  ? '2px solid var(--accent-indigo)'
-                  : '2px solid transparent',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'var(--transition-smooth)',
-            }}
-          >
-            Assessment Report
-          </button>
-          <button
-            onClick={() => setActiveModalTab('pdf')}
-            style={{
-              padding: '16px 20px',
-              fontSize: '0.9rem',
-              fontWeight: '600',
-              color: activeModalTab === 'pdf' ? 'var(--accent-indigo)' : 'var(--text-muted)',
-              borderBottom:
-                activeModalTab === 'pdf'
-                  ? '2px solid var(--accent-indigo)'
-                  : '2px solid transparent',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'var(--transition-smooth)',
-            }}
-          >
-            Original Resume PDF
-          </button>
-        </div>
+          </div>
 
         {activeModalTab === 'assessment' ? (
-          <>
+          <div style={{ paddingBottom: '32px' }}>
             {/* Score Highlight Banner */}
             <div
               style={{
                 ...styles.modalBanner,
                 backgroundColor: getScoreBgGlow(selectedCV.matchScore || 0),
                 borderColor: getScoreColor(selectedCV.matchScore || 0),
+                opacity: isScrolled ? 0 : 1,
+                transform: isScrolled ? 'translateY(-40px) translateX(40px) scale(0.8)' : 'translateY(0) translateX(0) scale(1)',
+                transformOrigin: 'top right',
+                maxHeight: isScrolled ? '0px' : '200px',
+                margin: isScrolled ? '0 32px' : '24px 32px',
+                padding: isScrolled ? '0 20px' : '16px 20px',
+                overflow: 'hidden',
+                transition: 'all 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
               }}
             >
               <div style={styles.bannerLeft}>
@@ -219,7 +264,7 @@ export const CVDetailModal: React.FC<CVDetailModalProps> = ({ selectedCV, onClos
               )}
             </div>
 
-            <div style={styles.modalBody}>
+            <div style={{ ...styles.modalBody, overflowY: 'visible' }}>
               {/* Category Scores Breakdown */}
               {details.categoryScores && (
                 <div style={styles.modalSection}>
@@ -555,14 +600,14 @@ export const CVDetailModal: React.FC<CVDetailModalProps> = ({ selectedCV, onClos
                   <div style={styles.summaryReportBox}>
                     {details.summaryReport.split('\n\n').map((paragraph: string, index: number) => (
                       <p key={index} style={{ marginBottom: '12px' }}>
-                        {paragraph}
+{paragraph}
                       </p>
                     ))}
                   </div>
                 </div>
               )}
             </div>
-          </>
+          </div>
         ) : (
           /* Live PDF Viewer Tab */
           <div
@@ -572,6 +617,7 @@ export const CVDetailModal: React.FC<CVDetailModalProps> = ({ selectedCV, onClos
               flexDirection: 'column',
               backgroundColor: 'var(--bg-main)',
               position: 'relative',
+              paddingBottom: '0px',
             }}
           >
             <iframe
@@ -583,33 +629,55 @@ export const CVDetailModal: React.FC<CVDetailModalProps> = ({ selectedCV, onClos
             />
           </div>
         )}
+        </div>
+      </div>
 
-        {/* Modal Footer */}
-        <div style={styles.modalFooter}>
-          <a
-            href={`${API_BASE_URL}/applications/${selectedCV.id}/download`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-primary"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginRight: '12px',
-              padding: '10px 20px',
-              textDecoration: 'none',
-              fontSize: '0.9rem',
-              fontWeight: '600',
-              borderRadius: 'var(--radius-md)',
-              cursor: 'pointer',
+      {/* RIGHT SIDEBAR (Action Buttons) */}
+      <div style={styles.rightSidebar}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+          <button
+            style={styles.iconBtn}
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+              e.currentTarget.style.transform = 'scale(1.05) translateY(-2px)';
             }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.transform = 'scale(1) translateY(0)';
+            }}
+            title="Close"
           >
-            <Download size={16} />
-            <span>Download CV</span>
-          </a>
-          <button className="btn-secondary" onClick={onClose} style={{ padding: '10px 20px' }}>
-            Close Assessment
+            <X size={22} />
           </button>
+          <span style={styles.iconBtnLabel}>Close</span>
+        </div>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+          <button
+            style={styles.iconBtnPrimary}
+            onClick={(e) => {
+              e.stopPropagation();
+              const link = document.createElement('a');
+              link.href = `${API_BASE_URL}/applications/${selectedCV.id}/download`;
+              link.download = `${selectedCV.applicantName.replace(/\s+/g, '_')}_CV.pdf`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.05) translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(255, 255, 255, 0.35)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1) translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 15px rgba(255, 255, 255, 0.2)';
+            }}
+            title="Download CV"
+          >
+            <Download size={20} />
+          </button>
+          <span style={styles.iconBtnLabel}>Download CV</span>
         </div>
       </div>
     </div>
@@ -630,6 +698,68 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 1100,
     padding: '24px',
     backdropFilter: 'blur(8px)',
+  },
+  leftSidebar: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    marginRight: '20px',
+    alignItems: 'flex-start',
+    width: '200px', // Ensure enough space
+    transform: 'translateZ(0)', // Fix Safari ghosting bug
+  },
+  rightSidebar: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '32px',
+    marginLeft: '20px',
+    alignItems: 'center',
+    width: '100px',
+  },
+  sidebarBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#ffffff',
+    fontSize: '1.05rem',
+    cursor: 'pointer',
+    transition: 'var(--transition-smooth)',
+    textAlign: 'left',
+    padding: '8px 0',
+  },
+  iconBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '50px',
+    height: '50px',
+    borderRadius: '50%',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backdropFilter: 'blur(10px)',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    color: '#fff',
+    cursor: 'pointer',
+    transition: 'var(--transition-smooth)',
+  },
+  iconBtnPrimary: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '50px',
+    height: '50px',
+    borderRadius: '50%',
+    backgroundColor: '#ffffff',
+    boxShadow: '0 4px 15px rgba(255, 255, 255, 0.2)',
+    border: 'none',
+    color: 'var(--accent-indigo)',
+    cursor: 'pointer',
+    transition: 'var(--transition-smooth)',
+  },
+  iconBtnLabel: {
+    color: '#fff',
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    opacity: 0.8,
+    textAlign: 'center',
   },
   modalContent: {
     width: '100%',

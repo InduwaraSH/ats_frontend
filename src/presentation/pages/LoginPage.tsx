@@ -40,7 +40,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigateToSignup }) => {
   };
 
   return (
-    <div style={styles.pageContainer}>
+    <div style={styles.pageContainer} className="animate-page-enter">
       {/* Decorative Background Orbs */}
       <div style={styles.glowOrb1} />
       <div style={styles.glowOrb2} />

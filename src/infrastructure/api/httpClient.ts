@@ -13,7 +13,7 @@ export async function fetchWithTimeout(
   url: string,
   options: RequestOptions = {}
 ): Promise<Response> {
-  const { timeoutMs = 15000, useExternalAuth = false, headers, ...restOptions } = options;
+  const { timeoutMs = 60000, useExternalAuth = false, headers, ...restOptions } = options;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);

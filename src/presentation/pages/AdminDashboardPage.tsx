@@ -214,7 +214,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBack }
   const adminUsers = users.filter((u) => u.role === 'admin').length;
 
   return (
-    <div style={styles.pageContainer}>
+    <div style={styles.pageContainer} className="animate-page-enter">
       {/* Header Bar */}
       <header style={styles.header}>
         <div style={styles.headerLeft}>
@@ -249,47 +249,79 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBack }
       <main style={styles.mainContent}>
         {/* Metrics Cards Grid */}
         <div style={styles.metricsGrid}>
-          <div style={styles.metricCard}>
+          <div style={styles.metricCard} className="admin-card-hover">
             <div style={styles.metricHeader}>
               <span style={styles.metricLabel}>Total Users</span>
               <div style={{ ...styles.metricIconBox, background: 'rgba(79, 70, 229, 0.1)', color: '#4f46e5' }}>
                 <Users size={18} />
               </div>
             </div>
-            <div style={styles.metricValue}>{totalUsers}</div>
+            <div style={styles.metricValueWrapper}>
+              {loading ? (
+                <span className="metric-skeleton" />
+              ) : (
+                <div style={styles.metricValue} className="animate-fade-in">
+                  {totalUsers}
+                </div>
+              )}
+            </div>
             <div style={styles.metricSub}>Registered accounts</div>
           </div>
 
-          <div style={styles.metricCard}>
+          <div style={styles.metricCard} className="admin-card-hover">
             <div style={styles.metricHeader}>
               <span style={styles.metricLabel}>Active Users</span>
               <div style={{ ...styles.metricIconBox, background: 'rgba(5, 150, 105, 0.1)', color: '#059669' }}>
                 <UserCheck size={18} />
               </div>
             </div>
-            <div style={styles.metricValue}>{activeUsers}</div>
+            <div style={styles.metricValueWrapper}>
+              {loading ? (
+                <span className="metric-skeleton" />
+              ) : (
+                <div style={styles.metricValue} className="animate-fade-in">
+                  {activeUsers}
+                </div>
+              )}
+            </div>
             <div style={styles.metricSub}>Can log in & access</div>
           </div>
 
-          <div style={styles.metricCard}>
+          <div style={styles.metricCard} className="admin-card-hover">
             <div style={styles.metricHeader}>
               <span style={styles.metricLabel}>Blocked Users</span>
               <div style={{ ...styles.metricIconBox, background: 'rgba(220, 38, 38, 0.1)', color: '#dc2626' }}>
                 <UserX size={18} />
               </div>
             </div>
-            <div style={styles.metricValue}>{blockedUsers}</div>
+            <div style={styles.metricValueWrapper}>
+              {loading ? (
+                <span className="metric-skeleton" />
+              ) : (
+                <div style={styles.metricValue} className="animate-fade-in">
+                  {blockedUsers}
+                </div>
+              )}
+            </div>
             <div style={styles.metricSub}>Access suspended</div>
           </div>
 
-          <div style={styles.metricCard}>
+          <div style={styles.metricCard} className="admin-card-hover">
             <div style={styles.metricHeader}>
               <span style={styles.metricLabel}>System Admins</span>
               <div style={{ ...styles.metricIconBox, background: 'rgba(124, 58, 237, 0.1)', color: '#7c3aed' }}>
                 <Shield size={18} />
               </div>
             </div>
-            <div style={styles.metricValue}>{adminUsers}</div>
+            <div style={styles.metricValueWrapper}>
+              {loading ? (
+                <span className="metric-skeleton" />
+              ) : (
+                <div style={styles.metricValue} className="animate-fade-in">
+                  {adminUsers}
+                </div>
+              )}
+            </div>
             <div style={styles.metricSub}>Full administrator rights</div>
           </div>
         </div>
@@ -322,10 +354,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBack }
               >
                 <option value="all">All Roles</option>
                 <option value="admin">Admin</option>
-                <option value="user">Normal User</option>
-                <option value="recruiter">Recruiter</option>
-                <option value="hiring_manager">Hiring Manager</option>
-                <option value="interviewer">Interviewer</option>
+                <option value="user">User</option>
               </select>
             </div>
 
@@ -491,9 +520,6 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBack }
                           >
                             <option value="admin">Admin</option>
                             <option value="user">User</option>
-                            <option value="recruiter">Recruiter</option>
-                            <option value="hiring_manager">Hiring Manager</option>
-                            <option value="interviewer">Interviewer</option>
                           </select>
                         </td>
 
@@ -637,24 +663,110 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBack }
         </div>
       </main>
 
-      {/* Add User Modal */}
+      {/* Redesigned Premium Add User Modal */}
       {isAddModalOpen && (
         <div style={styles.modalOverlay}>
-          <div style={styles.modalContent} className="glass-panel animate-scale-up">
-            <div style={styles.modalHeader}>
-              <div style={styles.modalHeaderTitle}>
-                <UserPlus size={20} style={{ color: 'var(--accent-indigo)' }} />
-                <h3>Add New System User</h3>
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              borderRadius: 'var(--radius-lg)',
+              padding: '0',
+              overflow: 'hidden',
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-glass)',
+              boxShadow: '0 20px 50px -10px rgba(79, 70, 229, 0.18), 0 1px 3px rgba(0, 0, 0, 0.05)',
+            }}
+            className="glass-panel animate-scale-up"
+          >
+            {/* Top Decorative Gradient Accent */}
+            <div style={{ height: '5px', width: '100%', background: 'var(--grad-primary)' }} />
+
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '24px 28px 18px 28px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid var(--border-glass)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    backgroundColor: 'var(--accent-indigo-glow)',
+                    border: '1px solid rgba(99, 102, 241, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--accent-indigo)',
+                  }}
+                >
+                  <UserPlus size={22} />
+                </div>
+                <div>
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: '1.15rem',
+                      fontWeight: 700,
+                      color: 'var(--text-title)',
+                    }}
+                  >
+                    Add New System User
+                  </h3>
+                  <p
+                    style={{
+                      margin: '2px 0 0 0',
+                      fontSize: '0.82rem',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    Create account credentials and set access role
+                  </p>
+                </div>
               </div>
-              <button onClick={() => setIsAddModalOpen(false)} style={styles.modalCloseBtn}>
-                <X size={18} />
+              <button
+                onClick={() => setIsAddModalOpen(false)}
+                style={{
+                  background: 'rgba(0, 0, 0, 0.04)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'var(--transition-fast)',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.08)')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.04)')}
+              >
+                <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleAddUser} style={styles.modalForm}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>
-                  <UserIcon size={14} /> Full Name
+            {/* Modal Form */}
+            <form onSubmit={handleAddUser} style={{ padding: '24px 28px 28px 28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              {/* Full Name Input */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label
+                  style={{
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    color: 'var(--text-title)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <UserIcon size={14} style={{ color: 'var(--accent-indigo)' }} /> Full Name
                 </label>
                 <input
                   type="text"
@@ -662,13 +774,41 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBack }
                   placeholder="e.g. John Doe"
                   value={newFullName}
                   onChange={(e) => setNewFullName(e.target.value)}
-                  style={styles.formInput}
+                  style={{
+                    width: '100%',
+                    padding: '11px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-glass)',
+                    fontSize: '0.9rem',
+                    outline: 'none',
+                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                    color: 'var(--text-title)',
+                    transition: 'var(--transition-fast)',
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = 'var(--accent-indigo)';
+                    e.target.style.boxShadow = '0 0 0 3px var(--accent-indigo-glow)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = 'var(--border-glass)';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 />
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.label}>
-                  <Mail size={14} /> Email Address
+              {/* Email Address Input */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label
+                  style={{
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    color: 'var(--text-title)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Mail size={14} style={{ color: 'var(--accent-indigo)' }} /> Email Address
                 </label>
                 <input
                   type="email"
@@ -676,13 +816,41 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBack }
                   placeholder="e.g. john@company.com"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  style={styles.formInput}
+                  style={{
+                    width: '100%',
+                    padding: '11px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-glass)',
+                    fontSize: '0.9rem',
+                    outline: 'none',
+                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                    color: 'var(--text-title)',
+                    transition: 'var(--transition-fast)',
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = 'var(--accent-indigo)';
+                    e.target.style.boxShadow = '0 0 0 3px var(--accent-indigo-glow)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = 'var(--border-glass)';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 />
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.label}>
-                  <KeyRound size={14} /> Password
+              {/* Password Input */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label
+                  style={{
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    color: 'var(--text-title)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <KeyRound size={14} style={{ color: 'var(--accent-indigo)' }} /> Password
                 </label>
                 <input
                   type="password"
@@ -690,47 +858,188 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onBack }
                   placeholder="Minimum 6 characters"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  style={styles.formInput}
+                  style={{
+                    width: '100%',
+                    padding: '11px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-glass)',
+                    fontSize: '0.9rem',
+                    outline: 'none',
+                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                    color: 'var(--text-title)',
+                    transition: 'var(--transition-fast)',
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = 'var(--accent-indigo)';
+                    e.target.style.boxShadow = '0 0 0 3px var(--accent-indigo-glow)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = 'var(--border-glass)';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 />
               </div>
 
-              <div style={styles.formGroup}>
-                <label style={styles.label}>
-                  <Shield size={14} /> Role
-                </label>
-                <select
-                  value={newRole}
-                  onChange={(e) => setNewRole(e.target.value)}
-                  style={styles.formSelect}
+              {/* Role Selection (Segmented Cards: User vs Admin) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label
+                  style={{
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    color: 'var(--text-title)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
                 >
-                  <option value="user">User (Normal User)</option>
-                  <option value="admin">Admin (Administrator)</option>
-                  <option value="recruiter">Recruiter</option>
-                  <option value="hiring_manager">Hiring Manager</option>
-                  <option value="interviewer">Interviewer</option>
-                </select>
+                  <Shield size={14} style={{ color: 'var(--accent-indigo)' }} /> Access Privilege Role
+                </label>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  {/* User Role Card */}
+                  <div
+                    onClick={() => setNewRole('user')}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: 'var(--radius-md)',
+                      border: newRole === 'user' ? '2px solid var(--accent-indigo)' : '1px solid var(--border-glass)',
+                      backgroundColor: newRole === 'user' ? 'var(--accent-indigo-glow)' : 'rgba(255, 255, 255, 0.5)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                      transition: 'var(--transition-smooth)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '6px',
+                        backgroundColor: newRole === 'user' ? 'var(--accent-indigo)' : 'rgba(15, 23, 42, 0.06)',
+                        color: newRole === 'user' ? '#ffffff' : 'var(--text-muted)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        marginTop: '2px',
+                      }}
+                    >
+                      <UserIcon size={14} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: newRole === 'user' ? 'var(--accent-indigo)' : 'var(--text-title)' }}>
+                        User
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: '1.2' }}>
+                        Standard candidate matcher workspace access
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Admin Role Card */}
+                  <div
+                    onClick={() => setNewRole('admin')}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: 'var(--radius-md)',
+                      border: newRole === 'admin' ? '2px solid var(--accent-purple)' : '1px solid var(--border-glass)',
+                      backgroundColor: newRole === 'admin' ? 'var(--accent-purple-glow)' : 'rgba(255, 255, 255, 0.5)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
+                      transition: 'var(--transition-smooth)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '6px',
+                        backgroundColor: newRole === 'admin' ? 'var(--accent-purple)' : 'rgba(15, 23, 42, 0.06)',
+                        color: newRole === 'admin' ? '#ffffff' : 'var(--text-muted)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        marginTop: '2px',
+                      }}
+                    >
+                      <ShieldCheck size={14} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: newRole === 'admin' ? 'var(--accent-purple)' : 'var(--text-title)' }}>
+                        Admin
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: '1.2' }}>
+                        Full system administrator & security control
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div style={styles.modalActions}>
+              {/* Modal Action Buttons */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: '12px',
+                  marginTop: '6px',
+                  paddingTop: '16px',
+                  borderTop: '1px solid var(--border-glass)',
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  style={styles.cancelBtn}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-glass)',
+                    background: 'rgba(15, 23, 42, 0.02)',
+                    color: 'var(--text-body)',
+                    fontWeight: 600,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    transition: 'var(--transition-fast)',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(15, 23, 42, 0.06)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(15, 23, 42, 0.02)')}
                 >
                   Cancel
                 </button>
+
                 <button
                   type="submit"
                   disabled={addingUser}
-                  style={styles.submitBtn}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 24px',
+                    borderRadius: 'var(--radius-md)',
+                    border: 'none',
+                    background: 'var(--grad-primary)',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px 0 rgba(79, 70, 229, 0.35)',
+                    transition: 'var(--transition-smooth)',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-1px)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
                 >
                   {addingUser ? (
                     <>
-                      <RefreshCw size={14} className="animate-spin" /> Adding...
+                      <RefreshCw size={15} className="animate-spin" /> Creating...
                     </>
                   ) : (
                     <>
-                      <UserPlus size={14} /> Create User Account
+                      <UserPlus size={15} /> Create User Account
                     </>
                   )}
                 </button>
@@ -928,6 +1237,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     color: 'var(--text-title)',
     lineHeight: 1,
+  },
+  metricValueWrapper: {
+    height: '32px',
+    display: 'flex',
+    alignItems: 'center',
     marginBottom: '6px',
   },
   metricSub: {

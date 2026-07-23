@@ -51,7 +51,7 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigateToLogin }) => 
   const activeError = validationError || error;
 
   return (
-    <div style={styles.pageContainer}>
+    <div style={styles.pageContainer} className="animate-page-enter">
       {/* Decorative background orbs */}
       <div style={styles.glowOrb1} />
       <div style={styles.glowOrb2} />

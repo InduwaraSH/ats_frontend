@@ -21,16 +21,14 @@ import {
   ChevronRight,
   Info,
   X,
-  Code,
-  ExternalLink,
-  Star,
-  GitFork,
-  Download,
   Plus,
   ChevronDown,
   Search,
   Calendar,
-  Shield
+  Shield,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Download,
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -92,8 +90,25 @@ export const DashboardPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPageBelow50, setCurrentPageBelow50] = useState(1);
   const [needsReviewExpanded, setNeedsReviewExpanded] = useState(false);
-  const [activeModalTab, setActiveModalTab] = useState<'assessment' | 'pdf'>('assessment');
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ats_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const nextState = !prev;
+      try {
+        localStorage.setItem('ats_sidebar_collapsed', String(nextState));
+      } catch {}
+      return nextState;
+    });
+  };
+
   const [currentView, setCurrentView] = useState<'workspace' | 'admin'>('workspace');
   const [uploadZoneExpanded, setUploadZoneExpanded] = useState(false);
   const [specCardExpanded, setSpecCardExpanded] = useState(true);
@@ -262,7 +277,6 @@ export const DashboardPage: React.FC = () => {
         style={styles.candidateCard}
         onClick={() => {
           setSelectedCV(cv);
-          setActiveModalTab('assessment');
         }}
       >
         <div style={styles.cardLayout}>
@@ -467,13 +481,7 @@ export const DashboardPage: React.FC = () => {
     return 'var(--accent-rose)';
   };
 
-  const getScoreBgGlow = (score: number) => {
-    if (score >= 75) return 'var(--accent-emerald-glow)';
-    if (score >= 60) return 'var(--accent-amber-glow)';
-    return 'var(--accent-rose-glow)';
-  };
-
-  const formatScore = (score: number) => {
+  const formatScore = (score?: number) => {
     if (score === undefined || score === null) return '0';
     return score % 1 === 0 ? score.toFixed(0) : score.toFixed(1);
   };
@@ -490,19 +498,52 @@ export const DashboardPage: React.FC = () => {
   }
 
   return (
-    <div style={styles.dashboardContainer}>
-      {/* 1. Left Sidebar (ChatGPT Chat History style) */}
-      <aside style={styles.sidebar}>
+    <div style={styles.dashboardContainer} className="animate-page-enter">
+      {/* 1. Left Sidebar (Collapsible Gemini/ChatGPT style - complete hide) */}
+      <aside
+        className="sidebar-container"
+        style={{
+          ...styles.sidebar,
+          width: isSidebarCollapsed ? '0px' : '280px',
+          minWidth: isSidebarCollapsed ? '0px' : '280px',
+          opacity: isSidebarCollapsed ? 0 : 1,
+          visibility: isSidebarCollapsed ? 'hidden' : 'visible',
+          borderRight: isSidebarCollapsed ? 'none' : '1px solid var(--border-glass)',
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+        }}
+      >
         {/* Brand Logo Header */}
-        <div style={styles.sidebarBrand}>
-          <div style={styles.sidebarBrandLogo}>
-            <Sparkles size={16} color="var(--accent-indigo)" />
+        <div style={{
+          ...styles.sidebarBrand,
+          padding: '20px 20px',
+          justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+            <div style={styles.sidebarBrandLogo} title="ATS Candidate Matcher">
+              <Sparkles size={16} color="var(--accent-indigo)" />
+            </div>
+            <span style={{ ...styles.sidebarBrandText, whiteSpace: 'nowrap' }}>
+              ATS Candidate Matcher
+            </span>
           </div>
-          <span style={styles.sidebarBrandText}>ATS Candidate Matcher</span>
+
+          <button
+            onClick={toggleSidebar}
+            title="Hide Sidebar"
+            className="sidebar-toggle-btn"
+          >
+            <PanelLeftClose size={18} />
+          </button>
         </div>
 
         {/* New Job Button */}
-        <button onClick={startNewJob} className="sidebar-new-job" style={styles.sidebarNewJobBtn}>
+        <button
+          onClick={startNewJob}
+          className="sidebar-new-job"
+          title="New Job"
+          style={styles.sidebarNewJobBtn}
+        >
           <Plus size={16} style={{ marginRight: '8px' }} />
           <span>New Job</span>
         </button>
@@ -525,7 +566,7 @@ export const DashboardPage: React.FC = () => {
           
           {/* Sidebar Search Bar */}
           {jobsList.length > 0 && (
-            <div style={{ padding: '0 16px 12px 16px', position: 'relative' }}>
+            <div style={{ padding: '0 0 12px 0', position: 'relative' }}>
               <input
                 type="text"
                 placeholder="Search jobs..."
@@ -549,7 +590,7 @@ export const DashboardPage: React.FC = () => {
                 size={12} 
                 style={{ 
                   position: 'absolute', 
-                  left: '26px', 
+                  left: '10px', 
                   top: '10px', 
                   color: 'var(--text-muted)' 
                 }} 
@@ -577,93 +618,96 @@ export const DashboardPage: React.FC = () => {
               </div>
             )
           ) : (
-            <div style={styles.sidebarHistoryList}>
-              {filteredJobsList.map((job) => (
-                <div
-                  key={job.jobId}
-                  className="sidebar-history-item-hover sidebar-history-item-el"
-                  style={{
-                    ...styles.sidebarHistoryItem,
-                    backgroundColor: job.jobId === activeJobId ? 'var(--accent-indigo-glow)' : 'transparent',
-                    color: job.jobId === activeJobId ? 'var(--accent-indigo)' : 'var(--text-muted)'
-                  }}
-                  onClick={() => {
-                    selectJob(job);
-                    setCurrentPage(1);
-                    setCurrentPageBelow50(1);
-                  }}
-                >
-                  {job.createdWay === 'cv-filtering-system' ? (
-                    <span style={{
-                      flexShrink: 0,
-                      fontSize: '0.62rem',
-                      fontWeight: '700',
-                      textTransform: 'uppercase',
-                      color: 'var(--accent-emerald)',
-                      backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                      border: '1px solid rgba(16, 185, 129, 0.15)',
-                      padding: '2px 5px',
-                      borderRadius: '3px',
-                      marginTop: '2px',
-                      letterSpacing: '0.02em',
-                      alignSelf: 'flex-start'
-                    }}>
-                      ATS
-                    </span>
-                  ) : (
-                    <span style={{
-                      flexShrink: 0,
-                      fontSize: '0.62rem',
-                      fontWeight: '700',
-                      textTransform: 'uppercase',
-                      color: 'var(--accent-indigo)',
-                      backgroundColor: 'rgba(99, 102, 241, 0.08)',
-                      border: '1px solid rgba(99, 102, 241, 0.15)',
-                      padding: '2px 5px',
-                      borderRadius: '3px',
-                      marginTop: '2px',
-                      letterSpacing: '0.02em',
-                      alignSelf: 'flex-start'
-                    }}>
-                      Web
-                    </span>
-                  )}
-                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, gap: '2px' }}>
-                    <span style={{ ...styles.sidebarHistoryItemText, fontWeight: '600', color: job.jobId === activeJobId ? 'var(--accent-indigo)' : 'var(--text-title)' }} title={job.title}>
-                      {job.title}
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                      <span>ID: {job.jobId}</span>
-                      {job.daysRemaining !== undefined && (
-                        <>
-                          <span style={{ fontSize: '0.6rem', opacity: 0.5 }}>•</span>
-                          <span style={{ 
-                            color: job.daysRemaining <= 5 ? '#f87171' : 'var(--text-muted)',
-                            fontWeight: job.daysRemaining <= 5 ? '700' : 'normal'
-                          }}>
-                            {job.daysRemaining}d left
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    className="delete-history-btn delete-job-btn"
-                    style={styles.sidebarHistoryItemDelete}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteConfirmation({
-                        isOpen: true,
-                        type: 'job',
-                        id: job.jobId,
-                        name: job.title
-                      });
+            <div style={styles.sidebarHistoryList} className="stagger-container">
+              {filteredJobsList.map((job) => {
+                const isActive = job.jobId === activeJobId;
+                return (
+                  <div
+                    key={job.jobId}
+                    className="sidebar-history-item-hover sidebar-history-item-el"
+                    style={{
+                      ...styles.sidebarHistoryItem,
+                      backgroundColor: isActive ? 'var(--accent-indigo-glow)' : 'transparent',
+                      color: isActive ? 'var(--accent-indigo)' : 'var(--text-muted)'
+                    }}
+                    onClick={() => {
+                      selectJob(job);
+                      setCurrentPage(1);
+                      setCurrentPageBelow50(1);
                     }}
                   >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
+                    {job.createdWay === 'cv-filtering-system' ? (
+                      <span style={{
+                        flexShrink: 0,
+                        fontSize: '0.62rem',
+                        fontWeight: '700',
+                        textTransform: 'uppercase',
+                        color: 'var(--accent-emerald)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                        border: '1px solid rgba(16, 185, 129, 0.15)',
+                        padding: '2px 5px',
+                        borderRadius: '3px',
+                        marginTop: '2px',
+                        letterSpacing: '0.02em',
+                        alignSelf: 'flex-start'
+                      }}>
+                        ATS
+                      </span>
+                    ) : (
+                      <span style={{
+                        flexShrink: 0,
+                        fontSize: '0.62rem',
+                        fontWeight: '700',
+                        textTransform: 'uppercase',
+                        color: 'var(--accent-indigo)',
+                        backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                        border: '1px solid rgba(99, 102, 241, 0.15)',
+                        padding: '2px 5px',
+                        borderRadius: '3px',
+                        marginTop: '2px',
+                        letterSpacing: '0.02em',
+                        alignSelf: 'flex-start'
+                      }}>
+                        Web
+                      </span>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, gap: '2px' }}>
+                      <span style={{ ...styles.sidebarHistoryItemText, fontWeight: '600', color: isActive ? 'var(--accent-indigo)' : 'var(--text-title)' }} title={job.title}>
+                        {job.title}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        <span>ID: {job.jobId}</span>
+                        {job.daysRemaining !== undefined && (
+                          <>
+                            <span style={{ fontSize: '0.6rem', opacity: 0.5 }}>•</span>
+                            <span style={{ 
+                              color: job.daysRemaining <= 5 ? '#f87171' : 'var(--text-muted)',
+                              fontWeight: job.daysRemaining <= 5 ? '700' : 'normal'
+                            }}>
+                              {job.daysRemaining}d left
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      className="delete-history-btn delete-job-btn"
+                      style={styles.sidebarHistoryItemDelete}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirmation({
+                          isOpen: true,
+                          type: 'job',
+                          id: job.jobId,
+                          name: job.title
+                        });
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -673,6 +717,7 @@ export const DashboardPage: React.FC = () => {
           <button
             onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
             className="sidebar-user-btn-el"
+            title={user?.email}
             style={styles.sidebarUserBtn}
           >
             <div style={styles.sidebarUserAvatar}>
@@ -724,7 +769,7 @@ export const DashboardPage: React.FC = () => {
       </aside>
 
       {/* 2. Main Content Workspace */}
-      <div style={styles.mainContent}>
+      <div className="main-content-fluid" style={styles.mainContent}>
         {/* Header Bar */}
         <header style={styles.mainHeader}>
           {activeJobId ? (
@@ -732,6 +777,16 @@ export const DashboardPage: React.FC = () => {
               
               {/* Left Side: Job Info */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {isSidebarCollapsed && (
+                  <button
+                    onClick={toggleSidebar}
+                    title="Expand Recent Jobs Sidebar"
+                    className="sidebar-toggle-btn"
+                    style={{ marginRight: '2px' }}
+                  >
+                    <PanelLeftOpen size={18} />
+                  </button>
+                )}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -866,6 +921,16 @@ export const DashboardPage: React.FC = () => {
             </div>
           ) : (
             <div style={styles.mainHeaderJobInfo}>
+              {isSidebarCollapsed && (
+                <button
+                  onClick={toggleSidebar}
+                  title="Show Recent Jobs Sidebar"
+                  className="sidebar-toggle-btn"
+                  style={{ marginRight: '6px' }}
+                >
+                  <PanelLeftOpen size={18} />
+                </button>
+              )}
               <Sparkles size={16} color="var(--accent-indigo)" />
               <span style={styles.mainHeaderJobTitle}>New Assessment Setup</span>
             </div>
@@ -2016,405 +2081,6 @@ export const DashboardPage: React.FC = () => {
       )}
 
       {/* Detailed Candidate CV Matching Modal */}
-      {selectedCV && selectedCV.matchDetails && (
-        <div style={styles.modalOverlay} className="animate-fade-in" onClick={() => setSelectedCV(null)}>
-          <div
-            className="glass-panel animate-scale-up"
-            style={styles.modalContent}
-            onClick={(e) => e.stopPropagation()} // Prevent closing
-          >
-            {/* Modal Header */}
-            <div style={styles.modalHeader}>
-              <div>
-                <h3 style={styles.modalTitle}>{selectedCV.applicantName}</h3>
-                <p style={styles.modalSubtitle}>Detailed Assessment & Match Analytics</p>
-                {/* Profile Links */}
-                {(selectedCV.githubUrl || selectedCV.linkedinUrl) && (
-                  <div style={{ display: 'flex', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
-                    {selectedCV.githubUrl && (
-                      <a
-                        href={selectedCV.githubUrl.startsWith('http') ? selectedCV.githubUrl : `https://${selectedCV.githubUrl}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', fontWeight: '600', color: 'var(--accent-indigo)', textDecoration: 'none', backgroundColor: 'var(--accent-indigo-glow)', padding: '3px 10px', borderRadius: '20px', border: '1px solid rgba(99,102,241,0.2)' }}
-                      >
-                        <Code size={12} />
-                        GitHub
-                        <ExternalLink size={10} />
-                      </a>
-                    )}
-                    {selectedCV.linkedinUrl && (
-                      <a
-                        href={selectedCV.linkedinUrl.startsWith('http') ? selectedCV.linkedinUrl : `https://${selectedCV.linkedinUrl}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', fontWeight: '600', color: '#0a66c2', textDecoration: 'none', backgroundColor: 'rgba(10, 102, 194, 0.08)', padding: '3px 10px', borderRadius: '20px', border: '1px solid rgba(10, 102, 194, 0.2)' }}
-                      >
-                        <ExternalLink size={10} />
-                        LinkedIn
-                        <ExternalLink size={10} />
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
-              <button style={styles.modalClose} onClick={() => setSelectedCV(null)}>
-                <X size={20} />
-              </button>
-            </div>
-            
-            {/* Modal Tabs Selector */}
-            <div style={{ display: 'flex', borderBottom: '1px solid var(--border-glass)', padding: '0 32px', backgroundColor: 'var(--bg-surface)' }}>
-              <button
-                onClick={() => setActiveModalTab('assessment')}
-                style={{
-                  padding: '16px 20px',
-                  fontSize: '0.9rem',
-                  fontWeight: '600',
-                  color: activeModalTab === 'assessment' ? 'var(--accent-indigo)' : 'var(--text-muted)',
-                  borderBottom: activeModalTab === 'assessment' ? '2px solid var(--accent-indigo)' : '2px solid transparent',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'var(--transition-smooth)'
-                }}
-              >
-                Assessment Report
-              </button>
-              <button
-                onClick={() => setActiveModalTab('pdf')}
-                style={{
-                  padding: '16px 20px',
-                  fontSize: '0.9rem',
-                  fontWeight: '600',
-                  color: activeModalTab === 'pdf' ? 'var(--accent-indigo)' : 'var(--text-muted)',
-                  borderBottom: activeModalTab === 'pdf' ? '2px solid var(--accent-indigo)' : '2px solid transparent',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'var(--transition-smooth)'
-                }}
-              >
-                Original Resume PDF
-              </button>
-            </div>
-
-            {activeModalTab === 'assessment' ? (
-              <>
-                {/* Score Highlight Banner */}
-                <div
-                  style={{
-                    ...styles.modalBanner,
-                    backgroundColor: getScoreBgGlow(selectedCV.matchScore || 0),
-                    borderColor: getScoreColor(selectedCV.matchScore || 0),
-                  }}
-                >
-                  <div style={styles.bannerLeft}>
-                    <div
-                      style={{
-                        ...styles.bannerScoreBox,
-                        backgroundColor: getScoreColor(selectedCV.matchScore || 0),
-                      }}
-                    >
-                      {formatScore(selectedCV.matchScore)}%
-                    </div>
-                    <div>
-                      <h4 style={styles.bannerScoreTitle}>Match Compatibility Score</h4>
-                      <p style={styles.bannerScoreDesc}>
-                        Determined by matching core technical competencies, background details, and experience.
-                      </p>
-                    </div>
-                  </div>
-                  <div style={styles.bannerRight}>
-                    <Sparkles size={20} color={getScoreColor(selectedCV.matchScore || 0)} style={{ animation: 'pulseGlow 2s infinite' }} />
-                  </div>
-                </div>
-
-                {/* Modal Scroll Body */}
-                <div style={styles.modalBody}>
-                  <div style={styles.modalSection}>
-                    <h4 style={styles.sectionHeading}>
-                      <Info size={16} color="var(--accent-indigo)" />
-                      Candidate Overview
-                    </h4>
-                    <div style={styles.overviewGrid}>
-                      <div style={styles.overviewItem}>
-                        <span style={styles.overviewLabel}>Experience Level</span>
-                        <span style={styles.overviewVal}>{selectedCV.matchDetails.experienceSummary}</span>
-                      </div>
-                      <div style={styles.overviewItem}>
-                        <span style={styles.overviewLabel}>Education & Credentials</span>
-                        <span style={styles.overviewVal}>{selectedCV.matchDetails.educationSummary}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Matching Skills Section */}
-                  <div style={styles.modalSection}>
-                    <h4 style={styles.sectionHeading}>
-                      <CheckCircle2 size={16} color="var(--accent-emerald)" />
-                      Matching Skills (JD Alignments)
-                    </h4>
-                    <div style={styles.tagsContainer}>
-                      {selectedCV.matchDetails.matchingSkills.length === 0 ? (
-                        <p style={styles.noTagsText}>No matching skills identified.</p>
-                      ) : (
-                        selectedCV.matchDetails.matchingSkills.map((skill) => (
-                          <span key={skill} style={styles.tagMatch}>
-                            {skill}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Missing Skills Section */}
-                  <div style={styles.modalSection}>
-                    <h4 style={styles.sectionHeading}>
-                      <XCircle size={16} color="var(--accent-rose)" />
-                      Missing Skills (Target Gaps)
-                    </h4>
-                    <div style={styles.tagsContainer}>
-                      {selectedCV.matchDetails.missingSkills.length === 0 ? (
-                        <span style={{ ...styles.tagMatch, backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--accent-emerald)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>No missing requirements detected! (Perfect Match)</span>
-                      ) : (
-                        selectedCV.matchDetails.missingSkills.map((skill) => (
-                          <span key={skill} style={styles.tagMissing}>
-                            {skill}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Additional Advantages Section */}
-                  <div style={styles.modalSection}>
-                    <h4 style={styles.sectionHeading}>
-                      <Award size={16} color="var(--accent-purple)" />
-                      Additional Advantages (Bonus Value)
-                    </h4>
-                    <div style={styles.tagsContainer}>
-                      {selectedCV.matchDetails.additionalAdvantages.map((skill) => (
-                        <span key={skill} style={styles.tagAdvantage}>
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* GitHub Repositories Section */}
-                  <div style={styles.modalSection}>
-                    <h4 style={styles.sectionHeading}>
-                      <Code size={16} color="var(--text-title)" />
-                      GitHub Repositories & Tech Alignments
-                    </h4>
-                    
-                    {(!selectedCV.matchDetails.github_projects || selectedCV.matchDetails.github_projects.length === 0) ? (
-                      <p style={styles.noTagsText}>No public GitHub repositories detected in candidate contact URLs.</p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '4px' }}>
-                        {selectedCV.matchDetails.github_projects.map((proj: any) => (
-                          <div
-                            key={proj.html_url || proj.name}
-                            style={{
-                              padding: '16px',
-                              borderRadius: 'var(--radius-md)',
-                              backgroundColor: 'rgba(0, 0, 0, 0.02)',
-                              border: '1px solid var(--border-glass)',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '8px'
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
-                              {proj.html_url ? (
-                                <a
-                                  href={proj.html_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{
-                                    fontSize: '1rem',
-                                    fontWeight: '600',
-                                    color: 'var(--accent-indigo)',
-                                    textDecoration: 'none',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px'
-                                  }}
-                                >
-                                  <ExternalLink size={15} />
-                                  {proj.name}
-                                </a>
-                              ) : (
-                                <span style={{
-                                  fontSize: '1rem',
-                                  fontWeight: '600',
-                                  color: 'var(--text-title)',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '6px'
-                                }}>
-                                  <FileText size={15} color="var(--text-muted)" />
-                                  {proj.name}
-                                </span>
-                              )}
-                              
-                              {/* Match and Contributed Indicators */}
-                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                {proj.is_fork && (
-                                  <span
-                                    style={{
-                                      fontSize: '0.75rem',
-                                      fontWeight: '600',
-                                      padding: '2px 8px',
-                                      borderRadius: 'var(--radius-full)',
-                                      backgroundColor: 'rgba(99, 102, 241, 0.08)',
-                                      color: 'var(--accent-indigo)',
-                                      border: '1px solid rgba(99, 102, 241, 0.15)'
-                                    }}
-                                  >
-                                    Contributed Project
-                                  </span>
-                                )}
-                                <span
-                                  style={{
-                                    fontSize: '0.75rem',
-                                    fontWeight: '600',
-                                    padding: '2px 8px',
-                                    borderRadius: 'var(--radius-full)',
-                                    backgroundColor: proj.is_aligned ? 'rgba(16, 185, 129, 0.08)' : 'rgba(0, 0, 0, 0.04)',
-                                    color: proj.is_aligned ? 'var(--accent-emerald)' : 'var(--text-muted)',
-                                    border: proj.is_aligned ? '1px solid rgba(16, 185, 129, 0.15)' : '1px solid var(--border-glass)'
-                                  }}
-                                >
-                                  {proj.is_aligned ? 'Stack Aligned' : 'General Project'}
-                                </span>
-                              </div>
-                            </div>
-                            
-                            {/* Description */}
-                            {proj.description && (
-                              <p style={{ fontSize: '0.85rem', color: 'var(--text-body)', lineHeight: '1.4', margin: 0 }}>
-                                {proj.description}
-                              </p>
-                            )}
-                            
-                            {/* Repo Stats and Languages */}
-                            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '16px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                              {/* Stats (only if GitHub repo is linked) */}
-                              {proj.html_url && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                    <Star size={12} /> {proj.stars}
-                                  </span>
-                                  <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                    <GitFork size={12} /> {proj.forks}
-                                  </span>
-                                </div>
-                              )}
-                              
-                              {/* Languages */}
-                              {proj.languages && proj.languages.length > 0 && (
-                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                  {proj.languages.slice(0, 3).map((lang: string) => (
-                                    <span key={lang} style={{ backgroundColor: 'rgba(0, 0, 0, 0.03)', padding: '2px 6px', borderRadius: '4px' }}>
-                                      {lang}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Matching Stack tags */}
-                            {proj.matching_skills && proj.matching_skills.length > 0 && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
-                                <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-muted)' }}>Target Matches:</span>
-                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                  {proj.matching_skills.map((skill: string) => (
-                                    <span
-                                      key={skill}
-                                      style={{
-                                        fontSize: '0.72rem',
-                                        fontWeight: '600',
-                                        padding: '2px 8px',
-                                        borderRadius: '4px',
-                                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                                        color: 'var(--accent-emerald)',
-                                        border: '1px solid rgba(16, 185, 129, 0.15)'
-                                      }}
-                                    >
-                                      {skill}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ ...styles.modalSection, marginBottom: 0 }}>
-                    <h4 style={styles.sectionHeading}>
-                      <FileText size={16} color="var(--accent-indigo)" />
-                      Full Summary Evaluation Report
-                    </h4>
-                    <div style={styles.summaryReportBox}>
-                      {selectedCV.matchDetails.summaryReport.split('\n\n').map((paragraph, index) => (
-                        <p key={index} style={{ marginBottom: '12px' }}>
-                          {paragraph}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              /* Live PDF Viewer Tab */
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-main)', position: 'relative' }}>
-                <iframe
-                  src={`${API_BASE_URL}/applications/${selectedCV.id}/download?inline=true#view=FitH&toolbar=0`}
-                  width="100%"
-                  height="100%"
-                  style={{ border: 'none', flex: 1 }}
-                  title="Original Resume PDF"
-                />
-              </div>
-            )}
-            
-            {/* Modal Footer */}
-            <div style={styles.modalFooter}>
-              <a
-                href={`${API_BASE_URL}/applications/${selectedCV.id}/download`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-primary"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginRight: '12px',
-                  padding: '10px 20px',
-                  textDecoration: 'none',
-                  fontSize: '0.9rem',
-                  fontWeight: '600',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                }}
-              >
-                <Download size={16} />
-                <span>Download CV</span>
-              </a>
-              <button className="btn-secondary" onClick={() => setSelectedCV(null)} style={{ padding: '10px 20px' }}>
-                Close Assessment
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Detailed Candidate CV Matching Modal */}
       <CVDetailModal selectedCV={selectedCV} onClose={() => setSelectedCV(null)} />
 
       {/* Custom Delete Confirmation Modal */}
@@ -2719,13 +2385,14 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: '10px 16px',
-    backgroundColor: 'rgba(0, 0, 0, 0.02)',
-    border: '1px solid var(--border-glass)',
+    background: 'var(--grad-primary)',
+    border: 'none',
     borderRadius: 'var(--radius-md)',
-    color: 'var(--text-title)',
+    color: '#ffffff',
     fontSize: '0.88rem',
     fontWeight: '600',
     cursor: 'pointer',
+    boxShadow: '0 4px 14px 0 rgba(79, 70, 229, 0.35)',
     transition: 'var(--transition-smooth)',
   },
   sidebarHistory: {

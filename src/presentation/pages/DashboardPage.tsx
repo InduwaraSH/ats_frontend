@@ -29,6 +29,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Download,
+  Mail,
+  Users,
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -124,6 +126,10 @@ export const DashboardPage: React.FC = () => {
     name: ''
   });
   const [similarityThreshold, setSimilarityThreshold] = useState(50);
+  const [sendMailModalOpen, setSendMailModalOpen] = useState(false);
+  const [mailType, setMailType] = useState<'interview' | 'assignment'>('interview');
+  const [mailStep, setMailStep] = useState<'select' | 'compose'>('select');
+  const [mailBody, setMailBody] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1676,11 +1682,392 @@ export const DashboardPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* 4. Send Mail Button — visible when there are selected candidates */}
+            {above50.length > 0 && (
+              <button
+                onClick={() => setSendMailModalOpen(true)}
+                className="btn-primary"
+                id="send-mail-btn"
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  fontSize: '0.82rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '7px',
+                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.85), rgba(5, 150, 105, 0.9))',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  boxShadow: '0 4px 14px rgba(16, 185, 129, 0.25)',
+                  borderRadius: 'var(--radius-md)',
+                  color: '#fff',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(16, 185, 129, 0.4)';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 4px 14px rgba(16, 185, 129, 0.25)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                <Mail size={14} />
+                Send Mail
+              </button>
+            )}
           </div>
         )}
         </div>{/* end flex row wrapper */}
       </div>
 
+      {/* ── Send Mail Modal ─────────────────────────────────────────── */}
+      {sendMailModalOpen && (
+        <div
+          id="send-mail-modal-overlay"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(10, 14, 30, 0.55)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            zIndex: 9000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          className="animate-fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget) { setSendMailModalOpen(false); setMailStep('select'); setMailBody(''); } }}
+        >
+          <div
+            id="send-mail-modal"
+            className="animate-scale-up"
+            style={{
+              width: '520px',
+              maxWidth: '94vw',
+              maxHeight: '82vh',
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-glass)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: '0 24px 60px rgba(10, 14, 30, 0.18), 0 0 0 1px rgba(255,255,255,0.04)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '20px 24px',
+              borderBottom: '1px solid var(--border-glass)',
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(5, 150, 105, 0.03))',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '34px', height: '34px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                  border: '1px solid rgba(16, 185, 129, 0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Mail size={16} color="var(--accent-emerald)" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: 'var(--text-title)' }}>
+                    Send Mail to Selected Candidates
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    {above50.length} selected candidate{above50.length !== 1 ? 's' : ''} (Score ≥ 50)
+                  </p>
+                </div>
+              </div>
+              <button
+                id="close-send-mail-modal"
+                onClick={() => { setSendMailModalOpen(false); setMailStep('select'); setMailBody(''); }}
+                style={{
+                  background: 'none', border: 'none',
+                  color: 'var(--text-muted)', cursor: 'pointer',
+                  padding: '6px', borderRadius: '8px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background-color 0.15s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.04)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Candidate Email List */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '16px 24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+            }}>
+              {/* List header */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                marginBottom: '8px',
+                paddingBottom: '10px',
+                borderBottom: '1px solid var(--border-glass)',
+              }}>
+                <Users size={13} color="var(--accent-emerald)" />
+                <span style={{ fontSize: '0.73rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
+                  Selected Candidates
+                </span>
+              </div>
+
+              {above50.map((cv) => (
+                <div
+                  key={cv.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '10px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.04)',
+                    border: '1px solid rgba(16, 185, 129, 0.12)',
+                    transition: 'background-color 0.15s',
+                  }}
+                >
+                  {/* Score badge */}
+                  <div style={{
+                    flexShrink: 0,
+                    width: '38px', height: '38px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                    border: '1.5px solid rgba(16, 185, 129, 0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.68rem', fontWeight: '800',
+                    color: 'var(--accent-emerald)',
+                  }}>
+                    {Math.round(cv.matchScore)}%
+                  </div>
+
+                  {/* Name + Email */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: '0.88rem', fontWeight: '600',
+                      color: 'var(--text-title)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {cv.applicantName}
+                    </div>
+                    {cv.applicantEmail ? (
+                      <div style={{
+                        fontSize: '0.78rem',
+                        color: 'var(--accent-emerald)',
+                        fontWeight: '500',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        marginTop: '1px',
+                      }}>
+                        {cv.applicantEmail}
+                      </div>
+                    ) : (
+                      <div style={{
+                        fontSize: '0.75rem',
+                        color: 'var(--text-muted)',
+                        fontStyle: 'italic',
+                        marginTop: '1px',
+                      }}>
+                        No email found in CV
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Checkmark */}
+                  <CheckCircle2 size={14} color="var(--accent-emerald)" style={{ flexShrink: 0, opacity: 0.7 }} />
+                </div>
+              ))}
+            </div>
+
+            {/* Footer — Step 1: Mail Type + Create Mail OR Step 2: Compose */}
+            <div style={{
+              padding: '16px 24px 20px',
+              borderTop: '1px solid var(--border-glass)',
+              backgroundColor: 'rgba(255,255,255,0.01)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            }}>
+              {mailStep === 'select' ? (
+                <>
+                  {/* Mail Type dropdown — no emojis */}
+                  <div>
+                    <label style={{
+                      display: 'block',
+                      fontSize: '0.73rem',
+                      fontWeight: '700',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      color: 'var(--text-muted)',
+                      marginBottom: '6px',
+                    }}>
+                      Mail Type
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <select
+                        id="mail-type-dropdown"
+                        value={mailType}
+                        onChange={(e) => setMailType(e.target.value as 'interview' | 'assignment')}
+                        style={{
+                          width: '100%',
+                          padding: '10px 36px 10px 14px',
+                          fontSize: '0.88rem',
+                          fontWeight: '600',
+                          color: 'var(--text-title)',
+                          backgroundColor: 'var(--bg-surface)',
+                          border: '1px solid var(--border-glass)',
+                          borderRadius: 'var(--radius-md)',
+                          cursor: 'pointer',
+                          outline: 'none',
+                          appearance: 'none',
+                          WebkitAppearance: 'none',
+                          transition: 'border-color 0.2s',
+                        }}
+                        onFocus={(e) => e.target.style.borderColor = 'var(--accent-emerald)'}
+                        onBlur={(e) => e.target.style.borderColor = 'var(--border-glass)'}
+                      >
+                        <option value="interview">Interview Invitation</option>
+                        <option value="assignment">Assignment / Task</option>
+                      </select>
+                      <ChevronDown
+                        size={14}
+                        style={{
+                          position: 'absolute', right: '12px',
+                          top: '50%', transform: 'translateY(-50%)',
+                          color: 'var(--text-muted)', pointerEvents: 'none',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Create Mail button */}
+                  <button
+                    id="create-mail-btn"
+                    onClick={() => setMailStep('compose')}
+                    style={{
+                      width: '100%',
+                      padding: '11px',
+                      fontSize: '0.88rem',
+                      fontWeight: '700',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.85), rgba(5, 150, 105, 0.9))',
+                      border: '1px solid rgba(16, 185, 129, 0.4)',
+                      boxShadow: '0 4px 14px rgba(16, 185, 129, 0.2)',
+                      borderRadius: 'var(--radius-md)',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = '0 6px 20px rgba(16, 185, 129, 0.35)';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = '0 4px 14px rgba(16, 185, 129, 0.2)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    <Mail size={15} />
+                    Create Mail
+                  </button>
+                </>
+              ) : (
+                /* Step 2 — Compose mail body */
+                <>
+                  {/* Back link + label */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label style={{
+                      fontSize: '0.73rem',
+                      fontWeight: '700',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      color: 'var(--text-muted)',
+                    }}>
+                      Mail Body
+                      <span style={{
+                        marginLeft: '8px',
+                        fontSize: '0.68rem',
+                        fontWeight: '600',
+                        padding: '2px 7px',
+                        borderRadius: '4px',
+                        backgroundColor: 'rgba(16,185,129,0.08)',
+                        border: '1px solid rgba(16,185,129,0.18)',
+                        color: 'var(--accent-emerald)',
+                        textTransform: 'capitalize',
+                        letterSpacing: '0.02em',
+                      }}>
+                        {mailType === 'interview' ? 'Interview Invitation' : 'Assignment / Task'}
+                      </span>
+                    </label>
+                    <button
+                      onClick={() => setMailStep('select')}
+                      style={{
+                        background: 'none', border: 'none',
+                        fontSize: '0.75rem', fontWeight: '600',
+                        color: 'var(--text-muted)', cursor: 'pointer',
+                        padding: '2px 4px',
+                        display: 'flex', alignItems: 'center', gap: '4px',
+                      }}
+                    >
+                      ← Back
+                    </button>
+                  </div>
+
+                  {/* Mail body textarea */}
+                  <textarea
+                    id="mail-body-textarea"
+                    value={mailBody}
+                    onChange={(e) => setMailBody(e.target.value)}
+                    placeholder={mailType === 'interview'
+                      ? `Dear [Candidate Name],\n\nWe are pleased to invite you for an interview for the [Job Title] position...`
+                      : `Dear [Candidate Name],\n\nThank you for applying. We would like to assign you the following task...`
+                    }
+                    rows={7}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      fontSize: '0.85rem',
+                      lineHeight: '1.6',
+                      color: 'var(--text-title)',
+                      backgroundColor: 'var(--bg-surface)',
+                      border: '1px solid var(--border-glass)',
+                      borderRadius: 'var(--radius-md)',
+                      resize: 'vertical',
+                      outline: 'none',
+                      fontFamily: 'inherit',
+                      transition: 'border-color 0.2s',
+                      boxSizing: 'border-box',
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = 'var(--accent-emerald)'}
+                    onBlur={(e) => e.target.style.borderColor = 'var(--border-glass)'}
+                  />
+
+                  {/* Character hint */}
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'right' }}>
+                    {mailBody.length} characters
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* 3. Floating progress notification toast popup (Google Drive/ChatGPT style) */}
       {/* 3. Floating progress notification toast popup (Google Drive/ChatGPT style) */}
       {/* 3. Centered, blocking progress overlay modal for evaluations and re-evaluations */}

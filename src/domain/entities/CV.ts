@@ -8,6 +8,7 @@ export interface CV {
   fileName: string;
   fileSize: string;
   applicantName: string;
+  applicantEmail?: string; // Email extracted from CV (may not be present for all candidates)
   status: 'parsing' | 'completed' | 'failed';
   matchScore: number; // 0 to 100
   matchDetails?: MatchResult;

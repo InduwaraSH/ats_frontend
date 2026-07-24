@@ -93,23 +93,21 @@ export const CVDetailModal: React.FC<CVDetailModalProps> = ({ selectedCV, onClos
       </div>
 
       <div
-        className="glass-panel animate-scale-up"
+        className="animate-scale-up"
         style={styles.modalContent}
         onClick={(e) => e.stopPropagation()} // Prevent closing
       >
         {/* SINGLE SCROLL CONTAINER */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', position: 'relative' }} onScroll={handleScroll}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', position: 'relative', scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch', willChange: 'transform' }} onScroll={handleScroll}>
           {/* STICKY GLASSMORPHIC HEADER */}
           <div
             style={{
               position: 'sticky',
               top: 0,
               zIndex: 50,
-              backgroundColor: 'rgba(255, 255, 255, 0.5)',
-              backdropFilter: 'blur(30px)',
-              WebkitBackdropFilter: 'blur(30px)',
-              boxShadow: '0 4px 30px rgba(0, 0, 0, 0.05)',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.6)',
+              backgroundColor: 'var(--bg-surface)',
+              boxShadow: '0 1px 0 0 var(--border-glass)',
+              willChange: 'transform',
             }}
           >
             {/* Modal Header */}
@@ -592,7 +590,7 @@ export const CVDetailModal: React.FC<CVDetailModalProps> = ({ selectedCV, onClos
 
               {/* Full Summary Evaluation Report */}
               {details.summaryReport && (
-                <div style={{ ...styles.modalSection, marginBottom: 0 }}>
+                <div style={{ ...styles.modalSection, marginBottom: '70px' }}>
                   <h4 style={styles.sectionHeading}>
                     <FileText size={16} color="var(--accent-indigo)" />
                     Full Summary Evaluation Report
@@ -771,6 +769,8 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     overflow: 'hidden',
     boxShadow: 'var(--shadow-premium)',
+    transform: 'translateZ(0)',
+    willChange: 'transform',
   },
   modalHeader: {
     padding: '24px 32px',
@@ -842,6 +842,8 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     flex: 1,
     gap: '24px',
+    scrollBehavior: 'smooth',
+    WebkitOverflowScrolling: 'touch',
   },
   modalSection: {
     display: 'flex',
